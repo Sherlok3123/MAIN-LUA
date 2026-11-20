@@ -1319,26 +1319,22 @@ bs_v597.events = bs_v606:selectable(bs_fmt("events"), {
 		bs_v597.select,
 		true
 	})
-bs_v606_gear = bs_v597.events:create()
-bs_v597.tickrate = bs_v606_gear:slider(bs_fmt("server tickrate"), 64, 128, 64, 1, "t"):depend({
-	bs_v597.events,
-	true
-})
-bs_v597.dur_switch = bs_v606_gear:slider(bs_fmt("weapon switch duration"), 1, 30, 6, 1, "t"):depend({
+-- Use the existing gear group from the select switch (bs_v606)
+bs_v597.dur_switch_fallback = bs_v606:slider(bs_fmt("weapon switch fallback (s)"), 0.1, 2.0, 1.0, 0.1, "s"):depend({
 	bs_v597.events,
 	true
 }, {
 	bs_v597.events,
 	function() return bs_v597.events:get("weapon switch") end
 })
-bs_v597.dur_reload = bs_v606_gear:slider(bs_fmt("weapon reload duration"), 10, 100, 50, 1, "t"):depend({
+bs_v597.dur_reload_fallback = bs_v606:slider(bs_fmt("weapon reload fallback (s)"), 0.5, 8.0, 3.0, 0.1, "s"):depend({
 	bs_v597.events,
 	true
 }, {
 	bs_v597.events,
 	function() return bs_v597.events:get("weapon reload") end
 })
-bs_v597.dur_peek = bs_v606_gear:slider(bs_fmt("on peek duration"), 1, 30, 8, 1, "t"):depend({
+bs_v597.dur_peek = bs_v606:slider(bs_fmt("on peek duration"), 1, 30, 8, 1, "t"):depend({
 	bs_v597.events,
 	true
 }, {
@@ -9383,69 +9379,22 @@ function bs_defensive_mgr.reset_game_events_state()
 	bs_defensive_mgr.game_events_last_signal_peek = false
 end
 
--- Weapon-specific timing helpers for Game Events
-bs_defensive_mgr.weapon_deploy_time = {
-	["weapon_ak47"] = 1.0,
-	["weapon_m4a1"] = 1.0,
-	["weapon_m4a1_silencer"] = 1.0,
-	["weapon_awp"] = 1.0,
-	["weapon_ssg08"] = 1.0,
-	["weapon_scar20"] = 1.0,
-	["weapon_g3sg1"] = 1.0,
-	["weapon_deagle"] = 1.0,
-	["weapon_revolver"] = 1.0,
-	["weapon_glock"] = 0.5,
-	["weapon_hkp2000"] = 0.5,
-	["weapon_usp_silencer"] = 0.5,
-	["weapon_p250"] = 0.5,
-	["weapon_tec9"] = 0.5,
-	["weapon_fiveseven"] = 0.5,
-	["weapon_cz75a"] = 0.5,
-	["weapon_elite"] = 0.5,
-	["weapon_nova"] = 1.0,
-	["weapon_xm1014"] = 1.0,
-	["weapon_mag7"] = 1.0,
-	["weapon_sawedoff"] = 1.0,
-	["weapon_m249"] = 1.0,
-	["weapon_negev"] = 1.0,
-	["weapon_mac10"] = 0.5,
-	["weapon_mp9"] = 0.5,
-	["weapon_mp7"] = 0.5,
-	["weapon_ump45"] = 0.5,
-	["weapon_p90"] = 0.5,
-	["weapon_bizon"] = 0.5,
-	["weapon_galilar"] = 1.0,
-	["weapon_famas"] = 1.0,
-	["weapon_sg556"] = 1.0,
-	["weapon_aug"] = 1.0,
-	["weapon_taser"] = 1.0,
-	["weapon_flashbang"] = 0.5,
-	["weapon_hegrenade"] = 0.5,
-	["weapon_smokegrenade"] = 0.5,
-	["weapon_molotov"] = 0.5,
-	["weapon_incgrenade"] = 0.5,
-	["weapon_decoy"] = 0.5,
-}
-
+-- Weapon-specific timing helpers for Game Events (64-tick fixed)
 function bs_defensive_mgr.get_weapon_deploy_ticks(arg_292_0, arg_292_1)
 	local var_292_0 = entity.get_local_player()
 	if not var_292_0 then return arg_292_1 end
-	local var_292_1 = var_292_0:get_player_weapon()
-	if not var_292_1 then return arg_292_1 end
-	local var_292_2 = var_292_1:get_weapon_index()
-	local var_292_3 = var_292_1:get_classname()
 	
-	local var_292_4 = bs_defensive_mgr.weapon_deploy_time[var_292_3] or 1.0
-	
+	-- Primary: m_flNextAttack remaining time (authoritative)
 	if var_292_0.m_flNextAttack and var_292_0.m_flNextAttack > globals.curtime then
 		local var_292_5 = var_292_0.m_flNextAttack - globals.curtime
 		if var_292_5 > 0 then
-			var_292_4 = var_292_5
+			return math.ceil(var_292_5 * 64) + 2
 		end
 	end
 	
-	local var_292_6 = arg_292_0.tickrate and arg_292_0.tickrate:get() or 64
-	return math.ceil(var_292_4 * var_292_6) + 2
+	-- Fallback: configurable seconds (exposed in UI)
+	local var_292_6 = arg_292_0.dur_switch_fallback and arg_292_0.dur_switch_fallback:get() or 1.0
+	return math.ceil(var_292_6 * 64) + 2
 end
 
 function bs_defensive_mgr.get_weapon_reload_ticks(arg_292_0, arg_292_1)
@@ -9454,16 +9403,18 @@ function bs_defensive_mgr.get_weapon_reload_ticks(arg_292_0, arg_292_1)
 	local var_292_1 = var_292_0:get_player_weapon()
 	if not var_292_1 then return arg_292_1 end
 	
+	-- Primary: get_weapon_reload() returns remaining reload time in seconds
 	local var_292_2, var_292_3 = pcall(function()
 		return var_292_1:get_weapon_reload()
 	end)
 	
 	if var_292_2 and var_292_3 and var_292_3 > 0 then
-		local var_292_4 = arg_292_0.tickrate and arg_292_0.tickrate:get() or 64
-		return math.ceil(var_292_3 * var_292_4) + 2
+		return math.ceil(var_292_3 * 64) + 2
 	end
 	
-	return arg_292_1
+	-- Fallback: configurable seconds (exposed in UI)
+	local var_292_4 = arg_292_0.dur_reload_fallback and arg_292_0.dur_reload_fallback:get() or 3.0
+	return math.ceil(var_292_4 * 64) + 2
 end
 
 function bs_v341(arg_330_0, arg_330_1, arg_330_2, arg_330_3)
@@ -12147,12 +12098,11 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 	-- Game Events Defensive: three independent timers with weapon-aware timing
 	-- Weapon Switch: uses m_flNextAttack or weapon deploy time + 2 ticks
 	-- Weapon Reload: uses get_weapon_reload() + 2 ticks
-	-- On Peek: user-configured duration + 2 ticks
+	-- On Peek: user-configured duration (ticks) + 2 ticks
 	local bs_break_lc_cfg = bs_menu.antiaim.general.break_lc
-	local bs_ge_tickrate = bs_break_lc_cfg.tickrate and bs_break_lc_cfg.tickrate:get() or 64
-	local bs_ge_dur_switch = bs_break_lc_cfg.dur_switch and bs_break_lc_cfg.dur_switch:get() or 6
-	local bs_ge_dur_reload = bs_break_lc_cfg.dur_reload and bs_break_lc_cfg.dur_reload:get() or 50
-	local bs_ge_dur_peek = bs_break_lc_cfg.dur_peek and bs_break_lc_cfg.dur_peek:get() or 8
+	local bs_ge_dur_switch_fallback = bs_break_lc_cfg.dur_switch_fallback and bs_break_lc_cfg.dur_switch_fallback:get() or 1.0
+	local bs_ge_dur_reload_fallback = bs_break_lc_cfg.dur_reload_fallback and bs_break_lc_cfg.dur_reload_fallback:get() or 3.0
+	local bs_ge_dur_peek = (bs_break_lc_cfg.dur_peek and bs_break_lc_cfg.dur_peek:get() or 8) + 2
 
 	local bs_lc_break_evt = false
 	local bs_ge_signal_switch = false
@@ -12194,34 +12144,40 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 	end)
 
 	-- Rising-edge detection for each event type (independent)
+	-- Initialize timers with full duration (2 safety ticks already included in helper functions)
+	-- Do NOT decrement on activation tick; first decrement happens on next non-choked command
+	local bs_activated_switch = false
+	local bs_activated_reload = false
+	local bs_activated_peek = false
 	if bs_ge_signal_switch and not bs_defensive_mgr.game_events_last_signal_switch then
-		local var_ticks = bs_defensive_mgr.get_weapon_deploy_ticks(bs_break_lc_cfg, bs_ge_dur_switch)
-		bs_defensive_mgr.game_events_hold_switch = var_ticks
+		bs_defensive_mgr.game_events_hold_switch = bs_defensive_mgr.get_weapon_deploy_ticks(bs_break_lc_cfg, bs_ge_dur_switch_fallback)
+		bs_activated_switch = true
 		bs_v316["game events"] = 0
 	end
 	if bs_ge_signal_reload and not bs_defensive_mgr.game_events_last_signal_reload then
-		local var_ticks = bs_defensive_mgr.get_weapon_reload_ticks(bs_break_lc_cfg, bs_ge_dur_reload)
-		bs_defensive_mgr.game_events_hold_reload = var_ticks
+		bs_defensive_mgr.game_events_hold_reload = bs_defensive_mgr.get_weapon_reload_ticks(bs_break_lc_cfg, bs_ge_dur_reload_fallback)
+		bs_activated_reload = true
 		bs_v316["game events"] = 0
 	end
 	if bs_ge_signal_peek and not bs_defensive_mgr.game_events_last_signal_peek then
 		bs_defensive_mgr.game_events_hold_peek = bs_ge_dur_peek
+		bs_activated_peek = true
 		bs_v316["game events"] = 0
 	end
 	bs_defensive_mgr.game_events_last_signal_switch = bs_ge_signal_switch
 	bs_defensive_mgr.game_events_last_signal_reload = bs_ge_signal_reload
 	bs_defensive_mgr.game_events_last_signal_peek = bs_ge_signal_peek
 
-	-- Decrement all active timers on non-choked commands
+	-- Decrement all active timers on non-choked commands (skip newly activated timers)
 	local bs_decrement_hold = (arg_389_0.choked_commands == 0)
 	if bs_decrement_hold then
-		if bs_defensive_mgr.game_events_hold_switch > 0 then
+		if bs_defensive_mgr.game_events_hold_switch > 0 and not bs_activated_switch then
 			bs_defensive_mgr.game_events_hold_switch = bs_defensive_mgr.game_events_hold_switch - 1
 		end
-		if bs_defensive_mgr.game_events_hold_reload > 0 then
+		if bs_defensive_mgr.game_events_hold_reload > 0 and not bs_activated_reload then
 			bs_defensive_mgr.game_events_hold_reload = bs_defensive_mgr.game_events_hold_reload - 1
 		end
-		if bs_defensive_mgr.game_events_hold_peek > 0 then
+		if bs_defensive_mgr.game_events_hold_peek > 0 and not bs_activated_peek then
 			bs_defensive_mgr.game_events_hold_peek = bs_defensive_mgr.game_events_hold_peek - 1
 		end
 	end

@@ -9338,11 +9338,15 @@ end
 -- Game Events Defensive lifecycle tracking
 bs_defensive_mgr.game_events_was_active = false
 bs_defensive_mgr.game_events_armed = true  -- allows fresh duration on first event
+bs_defensive_mgr.game_events_hold = 0       -- remaining hold ticks (choked-commands-aware)
+bs_defensive_mgr.game_events_last_signal = false  -- for rising-edge detection
 
 function bs_defensive_mgr.reset_game_events_state()
 	bs_v316["game events"] = 0
 	bs_defensive_mgr.game_events_was_active = false
 	bs_defensive_mgr.game_events_armed = true
+	bs_defensive_mgr.game_events_hold = 0
+	bs_defensive_mgr.game_events_last_signal = false
 end
 
 function bs_v341(arg_330_0, arg_330_1, arg_330_2, arg_330_3)
@@ -9709,15 +9713,17 @@ local var_336_13
 		end
 
 		-- Game Events Defensive lifecycle: track activation/expire to give each event a fresh duration
+		-- Respect the hold timer managed in CreateMove; do not reset while hold is active.
 		local var_336_13_is_ge = (var_336_14 == "game events")
+		local var_336_13_hold_active = bs_defensive_mgr.game_events_hold and bs_defensive_mgr.game_events_hold > 0
 		if var_336_13_is_ge then
-			if not bs_defensive_mgr.game_events_was_active and bs_defensive_mgr.game_events_armed then
+			if not bs_defensive_mgr.game_events_was_active and bs_defensive_mgr.game_events_armed and not var_336_13_hold_active then
 				bs_v316["game events"] = 0
 				bs_defensive_mgr.game_events_armed = false
 			end
 			bs_defensive_mgr.game_events_was_active = true
 		else
-			if bs_defensive_mgr.game_events_was_active then
+			if bs_defensive_mgr.game_events_was_active and not var_336_13_hold_active then
 				bs_defensive_mgr.game_events_armed = true
 				bs_v316["game events"] = 0
 				bs_defensive_mgr.game_events_was_active = false
@@ -11995,11 +12001,52 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 
 	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 
-	-- Game events take priority over everything
+	-- Game Events Defensive: proper hold lifecycle
+	-- Detect rising edge of event trigger, start hold with configured duration,
+	-- keep Game Events profile active for hold duration even if signal disappears.
+	-- Safe Head interrupts output but does not reset hold.
 	local bs_lc_break_evt = false
 	pcall(function()
 		bs_lc_break_evt = bs_break_lc_evt(bs_menu.antiaim.general.break_lc) and bs_break_lc.think(arg_389_0)
 	end)
+
+	-- Rising-edge detection for new event activation
+	local bs_ge_signal_now = bs_lc_break_evt
+	local bs_ge_signal_was = bs_defensive_mgr.game_events_last_signal
+	bs_defensive_mgr.game_events_last_signal = bs_ge_signal_now
+
+	if bs_ge_signal_now and not bs_ge_signal_was then
+		-- New event activation: read configured duration and start hold
+		local bs_ge_settings = bs_menu.antiaim.defensive and bs_menu.antiaim.defensive.settings and bs_menu.antiaim.defensive.settings["game events"]
+		local bs_ge_duration = bs_ge_settings and bs_ge_settings.def_duration and bs_ge_settings.def_duration:get() or 0
+		if bs_ge_duration > 0 then
+			bs_defensive_mgr.game_events_hold = bs_ge_duration
+			bs_v316["game events"] = 0  -- fresh duration counter
+		end
+	end
+
+	-- If hold active, force Game Events profile (priority over Legit AA, Safe Head for state selection)
+	local bs_force_game_events = bs_defensive_mgr.game_events_hold > 0
+	if bs_force_game_events then
+		-- Decrement hold on non-choked commands (tick-accurate)
+		if arg_389_0.choked_commands == 0 then
+			bs_defensive_mgr.game_events_hold = bs_defensive_mgr.game_events_hold - 1
+		end
+
+		bs_defensive_mgr.is_active = false
+		bs_legit_aa.is_working = false
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		-- Force defensive to use game events state
+		bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
+		bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, "game events", bs_safe_head_on)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+
+		return
+	end
+
+	-- Game events take priority over everything (original level-triggered branch for backward compat)
 	if bs_lc_break_evt and not bs_safe_head_on then
 		bs_defensive_mgr.is_active = false
 		bs_legit_aa.is_working = false

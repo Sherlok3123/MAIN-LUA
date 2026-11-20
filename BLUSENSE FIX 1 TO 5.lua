@@ -9772,7 +9772,10 @@ local var_336_13
 
 	local var_336_17 = var_336_15.def_duration and var_336_15.def_duration:get() or 0
 
-	if var_336_17 > 0 then
+	-- Bypass internal duration limiter for Game Events when external hold is authoritative
+	local var_336_18_bypass_duration = (var_336_14 == "game events" and bs_defensive_mgr.game_events_hold and bs_defensive_mgr.game_events_hold > 0)
+
+	if var_336_17 > 0 and not var_336_18_bypass_duration then
 		if var_336_17 > (bs_v316[var_336_14] or 0) then
 			bs_v316[var_336_14] = (bs_v316[var_336_14] or 0) + 1
 		end
@@ -12028,26 +12031,30 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 	-- If hold active, force Game Events profile (priority over Legit AA, Safe Head for state selection)
 	local bs_force_game_events = bs_defensive_mgr.game_events_hold > 0
 	if bs_force_game_events then
-		-- Decrement hold on non-choked commands (tick-accurate)
-		if arg_389_0.choked_commands == 0 then
-			bs_defensive_mgr.game_events_hold = bs_defensive_mgr.game_events_hold - 1
-		end
+		-- Decrement hold on non-choked commands (tick-accurate) AFTER this evaluation
+		-- so duration N produces exactly N valid defensive evaluations
+		local bs_decrement_hold = (arg_389_0.choked_commands == 0)
 
 		bs_defensive_mgr.is_active = false
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
-		-- Force defensive to use game events state
+		-- Force defensive to use game events state; pass false for safe_head_on so Safe Head never interrupts
 		bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
-		bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, "game events", bs_safe_head_on)
+		bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, "game events", false)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
+
+		if bs_decrement_hold then
+			bs_defensive_mgr.game_events_hold = bs_defensive_mgr.game_events_hold - 1
+		end
 
 		return
 	end
 
 	-- Game events take priority over everything (original level-triggered branch for backward compat)
-	if bs_lc_break_evt and not bs_safe_head_on then
+	-- Safe Head does NOT gate Game Events; Defensive AA has priority over Safe Head
+	if bs_lc_break_evt then
 		bs_defensive_mgr.is_active = false
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
@@ -12107,8 +12114,13 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 	end
 
-	-- Safe head runs last so it fully overrides the angle state.
-	bs_v1140 = bs_safe_head.update(arg_389_0, bs_aa_state_obj, bs_v1138)
+	-- Safe Head only runs when NO active defensive profile (Game Events or other Defensive AA)
+	-- Defensive AA has priority over Safe Head; Safe Head must not interrupt or override defensive output
+	local bs_any_defensive_active = bs_defensive_mgr.is_active or (bs_defensive_mgr.game_events_hold and bs_defensive_mgr.game_events_hold > 0)
+	local bs_v1140 = false
+	if not bs_any_defensive_active then
+		bs_v1140 = bs_safe_head.update(arg_389_0, bs_aa_state_obj, bs_v1138)
+	end
 
 	bs_freestanding.get_side(arg_389_0)
 

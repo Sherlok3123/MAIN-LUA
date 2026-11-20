@@ -11738,7 +11738,8 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 				end
 			end
 
-			bs_v1086 = arg_377_2["modifier_sliders_" .. bs_v88[arg_377_3]]:get()
+			local bs_v88_idx = bs_v88[arg_377_3] or 1
+			bs_v1086 = arg_377_2["modifier_sliders_" .. bs_v88_idx]:get()
 			arg_377_1.modifier_offset = bs_v1106 == "chaos" and bs_aa_updater.get_exploit_values(bs_v1086, bs_v73[arg_377_3]) or bs_v1106 == "dual" and bs_v1081(bs_v1086) or bs_v1086
 		end
 	elseif bs_v1106 == "dual" then
@@ -12081,13 +12082,14 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	if bs_force_game_events then
 		bs_defensive_mgr.is_active = false
 		bs_legit_aa.is_working = false
+		bs_async_flip(arg_389_1)
 
-		-- Apply "game events" preset (yaw, body_yaw, modifier)
-		local bs_v1138_ge = bs_aa_updater.get_preset("game events")
+		-- Apply current state's builder preset (Game Events overlays active state AA)
+		local bs_v1138_ge = bs_aa_updater.get_preset(arg_389_1)
 		if bs_v1138_ge then
-			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, "game events")
-			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, "game events")
-			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, "game events")
+			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
 		end
 
 		bs_aa_state_obj:run()
@@ -20953,18 +20955,22 @@ do
 		return rec
 	end
 
-	-- Refresh the enemy roster (includes dormant) so every condition has data.
+	-- Refresh the enemy roster (non-dormant only). Querying dormant entities each tick
+-- forces the engine to network/create dormant enemy instances around the map.
 	local function update_enemies(now)
-		local ok, players = pcall(entity.get_players, true, true)
+		local ok, players = pcall(entity.get_players, true, false)
 		if not ok or type(players) ~= "table" then return end
 		local seen = {}
-		for _, p in ipairs(players) do
-			if p ~= nil then
+for _, p in ipairs(players) do
+		if p ~= nil then
+			local ok_a, al = pcall(function() return p:is_alive() end)
+			if ok_a and al == true then
 				local idx = enemy_index(p)
 				seen[idx] = true
 				update_defensive(p, idx, now)
 			end
 		end
+	end
 		for idx in pairs(S.enemies) do
 			if not seen[idx] then S.enemies[idx] = nil end
 		end

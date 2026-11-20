@@ -1319,28 +1319,6 @@ bs_v597.events = bs_v606:selectable(bs_fmt("events"), {
 		bs_v597.select,
 		true
 	})
--- Use the existing gear group from the select switch (bs_v606)
-bs_v597.dur_switch_fallback = bs_v606:slider(bs_fmt("weapon switch fallback (s)"), 0.1, 2.0, 1.0, 0.1, "s"):depend({
-	bs_v597.events,
-	true
-}, {
-	bs_v597.events,
-	function() return bs_v597.events:get("weapon switch") end
-})
-bs_v597.dur_reload_fallback = bs_v606:slider(bs_fmt("weapon reload fallback (s)"), 0.5, 8.0, 3.0, 0.1, "s"):depend({
-	bs_v597.events,
-	true
-}, {
-	bs_v597.events,
-	function() return bs_v597.events:get("weapon reload") end
-})
-bs_v597.dur_peek = bs_v606:slider(bs_fmt("on peek duration"), 1, 30, 8, 1, "t"):depend({
-	bs_v597.events,
-	true
-}, {
-	bs_v597.events,
-	function() return bs_v597.events:get("on peek") end
-})
 bs_v597.additions_normal = bs_v606:selectable(bs_fmt("additions"), {
 	"ignore grenade"
 }):depend({
@@ -7192,10 +7170,10 @@ function bs_safe_head.think(arg_224_0)
 		return false
 	end
 
-	-- Distance gate: only trigger when the closest threat is within 1500 units.
+	-- Distance gate: only trigger when the closest threat is within 2300 units.
 	local target_origin = nil
 	pcall(function() target_origin = var_224_1:get_origin() end)
-	if my_origin and target_origin and my_origin:dist(target_origin) > 1500 then
+	if my_origin and target_origin and my_origin:dist(target_origin) > 2300 then
 		return false
 	end
 
@@ -9743,23 +9721,30 @@ function bs_defensive_mgr.update(arg_336_0, arg_336_1, arg_336_2, arg_336_3)
 		return false
 	end
 
-	local var_336_5 = bs_break_lc.think(arg_336_0)
-	local var_336_6 = var_336_0.active_on:get("doubletap")
-	local var_336_7 = var_336_0.active_on:get("hideshots")
+	-- Game Events profile bypasses normal activation requirements (DT/HS)
+	-- because it's driven by external event timers, not exploit availability
+	local var_336_5 = false
+	local var_336_6 = false
+	local var_336_7 = false
+	if arg_336_2 ~= "game events" then
+		var_336_5 = bs_break_lc.think(arg_336_0)
+		var_336_6 = var_336_0.active_on:get("doubletap")
+		var_336_7 = var_336_0.active_on:get("hideshots")
 
-	if not var_336_5 and (var_336_6 or var_336_7) then
-		local var_336_8, var_336_9 = pcall(function()
-			return bs_config.rage.main.double_tap:get()
-		end)
-		local var_336_10, var_336_11 = pcall(function()
-			return bs_config.rage.main.hide_shots:get()
-		end)
-		local var_336_12 = var_336_10 and var_336_11 or bs_auto_hide_shots.is_active
+		if not var_336_5 and (var_336_6 or var_336_7) then
+			local var_336_8, var_336_9 = pcall(function()
+				return bs_config.rage.main.double_tap:get()
+			end)
+			local var_336_10, var_336_11 = pcall(function()
+				return bs_config.rage.main.hide_shots:get()
+			end)
+			local var_336_12 = var_336_10 and var_336_11 or bs_auto_hide_shots.is_active
 
-		if (not var_336_6 or not var_336_8 or not var_336_9) and (not var_336_7 or not var_336_12) then
-			var_336_1()
+			if (not var_336_6 or not var_336_8 or not var_336_9) and (not var_336_7 or not var_336_12) then
+				var_336_1()
 
-			return false
+				return false
+			end
 		end
 	end
 
@@ -9821,13 +9806,14 @@ local var_336_13
 			end
 		end
 
-		if not var_336_15 or not var_336_15.enable:get() then
+if not var_336_15 or not var_336_15.enable:get() then
 			var_336_1()
 
 			return false
 		end
 
-	if var_336_15.activation_mode:get() == "hittable only" and not bs_safe_head.threat_can_hit_head(entity.get_threat(true) or entity.get_threat()) then
+	-- Game Events bypasses "hittable only" - driven by external timers, not threat visibility
+	if var_336_14 ~= "game events" and var_336_15.activation_mode:get() == "hittable only" and not bs_safe_head.threat_can_hit_head(entity.get_threat(true) or entity.get_threat()) then
 		var_336_1()
 
 		return false
@@ -11976,9 +11962,8 @@ function update_fakelag(_cmd)
 		end
 	end)
 end
-
 -- #############################################################################
--- #  [SEC-18] ANTI-AIM MAIN UPDATE (ORCHESTRATOR)
+-- #  [SEC-18] ANTI-AIM MAIN UPDATE (ORCHESTRATOR) - Unified Priority Gate
 -- #############################################################################
 function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 	update_fakelag(arg_389_0)
@@ -11991,198 +11976,88 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 
 	bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
 
-	bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
+	-- ========================================================================
+	-- PRIORITY GATE: Determine winning AA system before any writes
+	-- Higher priority SUPPRESSES lower priority (no overwrite races)
+	-- ========================================================================
 
-	if bs_v1138 == nil then
-		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
-		bs_legit_aa.is_working = false
-		pcall(function()
-			rage.antiaim:override_hidden_pitch(0)
-			rage.antiaim:override_hidden_yaw_offset(0)
-			bs_config.antiaim.fake_lag.limit:override(nil)
-			bs_config.antiaim.angles.pitch:override("Disabled")
-			bs_config.antiaim.angles.yaw:override("disabled")
-			bs_config.antiaim.angles.yaw_add:override(0)
-			bs_config.antiaim.angles.yaw_base:override("Local View")
-			bs_config.antiaim.angles.yaw_modifier:override("Disabled")
-			bs_config.antiaim.angles.modifier_offset:override(0)
-			bs_config.antiaim.angles.body_yaw:override(false)
-			bs_config.antiaim.angles.inverter:override(false)
-			bs_config.antiaim.angles.left_limit:override(0)
-			bs_config.antiaim.angles.right_limit:override(0)
-			bs_config.antiaim.angles.options:override({})
-			bs_config.antiaim.angles.disable_yaw_modifiers:override(false)
-			bs_config.antiaim.angles.body_freestanding:override(false)
-			bs_config.antiaim.angles.freestanding:override(false)
-			bs_config.antiaim.angles.freestand_peek:override("Off")
-			bs_config.antiaim.angles.avoid_backstab:override(false)
-			bs_config.rage.main.double_tap_lag_options:override("On Peek")
-			bs_config.rage.main.hide_shots_options:override("Favor Fire Rate")
-		end)
-		return
-	end
-
-	if not bs_v1138.allow_state:get() then
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
-		bs_legit_aa.is_working = false
-		pcall(function()
-			rage.antiaim:override_hidden_pitch(0)
-			rage.antiaim:override_hidden_yaw_offset(0)
-			bs_config.antiaim.fake_lag.limit:override(nil)
-			bs_config.antiaim.angles.pitch:override("Disabled")
-			bs_config.antiaim.angles.yaw:override("disabled")
-			bs_config.antiaim.angles.yaw_add:override(0)
-			bs_config.antiaim.angles.yaw_base:override("Local View")
-			bs_config.antiaim.angles.yaw_modifier:override("Disabled")
-			bs_config.antiaim.angles.modifier_offset:override(0)
-			bs_config.antiaim.angles.body_yaw:override(false)
-			bs_config.antiaim.angles.inverter:override(false)
-			bs_config.antiaim.angles.left_limit:override(0)
-			bs_config.antiaim.angles.right_limit:override(0)
-			bs_config.antiaim.angles.options:override({})
-			bs_config.antiaim.angles.disable_yaw_modifiers:override(false)
-			bs_config.antiaim.angles.body_freestanding:override(false)
-			bs_config.antiaim.angles.freestanding:override(false)
-			bs_config.antiaim.angles.freestand_peek:override("Off")
-			bs_config.antiaim.angles.avoid_backstab:override(false)
-			bs_config.rage.main.double_tap_lag_options:override("On Peek")
-			bs_config.rage.main.hide_shots_options:override("Favor Fire Rate")
-		end)
-		return
-	end
-
-
-	bs_aa_state_obj.avoid_backstab = bs_menu.antiaim.general.avoid_backstab.switch:get()
-
-	bs_async_flip(arg_389_1)
-
-	-- On-shot anti-brute trigger: fire ABF on the rising edge of in_attack (when we shoot)
-	pcall(function()
-	-- bs_v1138 is already builder[arg_389_1] (the active state's table); its .name is nil,
-	-- so the old builder[bs_v1138.name] lookup always failed -> use it directly.
-		local var_389_18_1 = bs_v1138
-
-		if var_389_18_1 and var_389_18_1.abf_on_shot and var_389_18_1.abf_on_shot:get() and arg_389_0.in_attack and not bs_anti_brute.on_shot_last_attack then
-			bs_v591({ name = "?", time = globals.curtime }, true, true)
-
-			-- Log the on-shot bruteforce trigger (local shot)
-			pcall(function()
-				local var_389_18_2 = bs_menu.info and bs_menu.info.notify
-				local var_389_18_3 = var_389_18_2 and var_389_18_2.col_abf_hit and var_389_18_2.col_abf_hit:get() or color(255, 160, 80, 255)
-				bs_notify.new({
-					"anti-bruteforce triggered by ",
-					"local shot",
-					" due to on-shot impact - angle shifted"
-				}, var_389_18_3)
-			end)
-		end
-
-		bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
-	end)
-
-	if arg_389_0.choked_commands == 0 then
-		bs_v734 = not bs_v734
-	end
-
-	-- Evaluate safe head once. Elysian model: normal AA always runs; safe head is
-	-- a defensive sub-state, so only body yaw is suppressed while it is active.
-	local bs_safe_head_on = false
-	pcall(function()
-		bs_safe_head_on = bs_safe_head.think(arg_389_0)
-	end)
-
-	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
-
-	-- Game Events Defensive: three independent timers with weapon-aware timing
-	-- Weapon Switch: uses m_flNextAttack or weapon deploy time + 2 ticks
-	-- Weapon Reload: uses get_weapon_reload() + 2 ticks
-	-- On Peek: user-configured duration (ticks) + 2 ticks
+	-- 1. GAME EVENTS - ABSOLUTE PRIORITY, FORCE-GATED, RUNS TO COMPLETION
+	-- Uses authoritative sources: m_flNextAttack (weapon switch), get_weapon_reload() (reload)
+	-- On peek: quickpeek + doubletap + exploit + running state
+	-- Once active, CANNOT be overridden by Freestanding, Manual AA, or any other system
+	-- ========================================================================
 	local bs_break_lc_cfg = bs_menu.antiaim.general.break_lc
-	local bs_ge_dur_switch_fallback = bs_break_lc_cfg.dur_switch_fallback and bs_break_lc_cfg.dur_switch_fallback:get() or 1.0
-	local bs_ge_dur_reload_fallback = bs_break_lc_cfg.dur_reload_fallback and bs_break_lc_cfg.dur_reload_fallback:get() or 3.0
-	local bs_ge_dur_peek = (bs_break_lc_cfg.dur_peek and bs_break_lc_cfg.dur_peek:get() or 8) + 2
 
-	local bs_lc_break_evt = false
-	local bs_ge_signal_switch = false
-	local bs_ge_signal_reload = false
-	local bs_ge_signal_peek = false
+	-- Game Events require Force Defensive to be enabled
+	local bs_force_defensive_on = false
 	pcall(function()
-		if not bs_break_lc_cfg or not bs_break_lc_cfg.events then return end
-		local var_292_0 = entity.get_local_player()
-		if not var_292_0 or not var_292_0:is_alive() then return end
-		
-		if bs_break_lc_cfg.events:get("weapon switch") and var_292_0.m_flNextAttack and var_292_0.m_flNextAttack > globals.curtime then
-			bs_ge_signal_switch = true
-			bs_lc_break_evt = true
-		end
-		
-		local var_292_1 = var_292_0:get_player_weapon()
-		if var_292_1 and bs_break_lc_cfg.events:get("weapon reload") then
-			local var_292_2, var_292_3 = pcall(function()
-				return var_292_1:get_weapon_reload()
-			end)
-			if var_292_2 and var_292_3 ~= -1 then
-				bs_ge_signal_reload = true
-				bs_lc_break_evt = true
-			end
-		end
-		
-		if bs_break_lc_cfg.events:get("on peek") and bs_break_lc_cfg.conditions and bs_break_lc_cfg.conditions:get("quickpeek") then
-			local var_292_4, var_292_5 = pcall(function()
-				return bs_config.rage.main.double_tap:get()
-			end)
-			if var_292_4 and var_292_5 and rage.exploit:get() == 1 then
-				local var_292_6 = bs_get_state.get()
-				if var_292_6 == "running" then
-					bs_ge_signal_peek = true
-					bs_lc_break_evt = true
-				end
-			end
-		end
+		bs_force_defensive_on = bs_break_lc_cfg.select and bs_break_lc_cfg.select:get()
 	end)
 
-	-- Rising-edge detection for each event type (independent)
-	-- Initialize timers with full duration (2 safety ticks already included in helper functions)
-	-- Do NOT decrement on activation tick; first decrement happens on next non-choked command
-	local bs_activated_switch = false
-	local bs_activated_reload = false
-	local bs_activated_peek = false
-	if bs_ge_signal_switch and not bs_defensive_mgr.game_events_last_signal_switch then
-		bs_defensive_mgr.game_events_hold_switch = bs_defensive_mgr.get_weapon_deploy_ticks(bs_break_lc_cfg, bs_ge_dur_switch_fallback)
-		bs_activated_switch = true
-		bs_v316["game events"] = 0
-	end
-	if bs_ge_signal_reload and not bs_defensive_mgr.game_events_last_signal_reload then
-		bs_defensive_mgr.game_events_hold_reload = bs_defensive_mgr.get_weapon_reload_ticks(bs_break_lc_cfg, bs_ge_dur_reload_fallback)
-		bs_activated_reload = true
-		bs_v316["game events"] = 0
-	end
-	if bs_ge_signal_peek and not bs_defensive_mgr.game_events_last_signal_peek then
-		bs_defensive_mgr.game_events_hold_peek = bs_ge_dur_peek
-		bs_activated_peek = true
-		bs_v316["game events"] = 0
-	end
-	bs_defensive_mgr.game_events_last_signal_switch = bs_ge_signal_switch
-	bs_defensive_mgr.game_events_last_signal_reload = bs_ge_signal_reload
-	bs_defensive_mgr.game_events_last_signal_peek = bs_ge_signal_peek
+	if bs_force_defensive_on then
+		local var_292_0 = entity.get_local_player()
+		if var_292_0 and var_292_0:is_alive() and bs_break_lc_cfg and bs_break_lc_cfg.events then
+			-- Weapon Switch: authoritative m_flNextAttack remaining time
+			if bs_break_lc_cfg.events:get("weapon switch") and var_292_0.m_flNextAttack and var_292_0.m_flNextAttack > globals.curtime then
+				local var_292_5 = var_292_0.m_flNextAttack - globals.curtime
+				if var_292_5 > 0 then
+					bs_defensive_mgr.game_events_hold_switch = math.ceil(var_292_5 * 64) + 2
+					bs_defensive_mgr.game_events_last_signal_switch = true
+					bs_v316["game events"] = 0
+				end
+			elseif bs_defensive_mgr.game_events_last_signal_switch then
+				bs_defensive_mgr.game_events_last_signal_switch = false
+			end
 
-	-- Decrement all active timers on non-choked commands (skip newly activated timers)
+			-- Weapon Reload: authoritative get_weapon_reload() remaining time
+			local var_292_1 = var_292_0:get_player_weapon()
+			if var_292_1 and bs_break_lc_cfg.events:get("weapon reload") then
+				local var_292_2, var_292_3 = pcall(function()
+					return var_292_1:get_weapon_reload()
+				end)
+				if var_292_2 and var_292_3 and var_292_3 > 0 then
+					bs_defensive_mgr.game_events_hold_reload = math.ceil(var_292_3 * 64) + 2
+					bs_defensive_mgr.game_events_last_signal_reload = true
+					bs_v316["game events"] = 0
+				end
+			elseif bs_defensive_mgr.game_events_last_signal_reload then
+				bs_defensive_mgr.game_events_last_signal_reload = false
+			end
+
+			-- On Peek: quickpeek + doubletap + exploit + running
+			if bs_break_lc_cfg.events:get("on peek") and bs_break_lc_cfg.conditions and bs_break_lc_cfg.conditions:get("quickpeek") then
+				local var_292_4, var_292_5 = pcall(function()
+					return bs_config.rage.main.double_tap:get()
+				end)
+				if var_292_4 and var_292_5 and rage.exploit:get() == 1 then
+					local var_292_6 = bs_get_state.get()
+					if var_292_6 == "running" then
+						bs_defensive_mgr.game_events_hold_peek = 8 + 2  -- fixed 8 ticks + 2 safety
+						bs_defensive_mgr.game_events_last_signal_peek = true
+						bs_v316["game events"] = 0
+					end
+				end
+			elseif bs_defensive_mgr.game_events_last_signal_peek then
+				bs_defensive_mgr.game_events_last_signal_peek = false
+			end
+		end
+	end
+
+	-- Decrement all active timers on non-choked commands (exact once per tick)
 	local bs_decrement_hold = (arg_389_0.choked_commands == 0)
 	if bs_decrement_hold then
-		if bs_defensive_mgr.game_events_hold_switch > 0 and not bs_activated_switch then
+		if bs_defensive_mgr.game_events_hold_switch > 0 then
 			bs_defensive_mgr.game_events_hold_switch = bs_defensive_mgr.game_events_hold_switch - 1
 		end
-		if bs_defensive_mgr.game_events_hold_reload > 0 and not bs_activated_reload then
+		if bs_defensive_mgr.game_events_hold_reload > 0 then
 			bs_defensive_mgr.game_events_hold_reload = bs_defensive_mgr.game_events_hold_reload - 1
 		end
-		if bs_defensive_mgr.game_events_hold_peek > 0 and not bs_activated_peek then
+		if bs_defensive_mgr.game_events_hold_peek > 0 then
 			bs_defensive_mgr.game_events_hold_peek = bs_defensive_mgr.game_events_hold_peek - 1
 		end
 	end
 
-	-- Game Events active if ANY timer > 0
+	-- Game Events active if ANY timer > 0 - FORCE GATED, RUNS TO COMPLETION
 	local bs_force_game_events = (bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek > 0)
 	if bs_force_game_events then
 		bs_defensive_mgr.is_active = false
@@ -12194,38 +12069,126 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 
-		return
+		return  -- ABSOLUTE PRIORITY: nothing below runs while Game Events is active
 	end
 
-	bs_v1139 = bs_legit_aa.think(arg_389_0)
-	bs_legit_aa.is_working = bs_v1139
-
-	if bs_v1139 and not bs_safe_head_on then
-		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, bs_v1138)
-		bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, false)
+	-- 2. FREESTANDING - Absolute priority when active (below Game Events)
+	local bs_fs_active = false
+	pcall(function()
+		bs_fs_active = bs_freestanding.think()
+	end)
+	if bs_fs_active then
+		bs_defensive_mgr.is_active = false
+		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
-
+		bs_freestanding.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
 		return
 	end
 
-	-- Defensive runs with safe_head_on so the defensive "safe head" profile
-	-- (hidden pitch/yaw) still applies while safe head is the active sub-state.
+	-- 3. MANUAL AA - Overrides everything below
+	local bs_manual_active = false
+	pcall(function()
+		bs_manual_active = bs_manual_yaw.think()
+	end)
+	if bs_manual_active then
+		bs_defensive_mgr.is_active = false
+		bs_legit_aa.is_working = false
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		bs_manual_yaw.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		return
+	end
+
+	-- 4. LEGIT AA - Overrides Defensive AA & Safe Head
+	local bs_v1139 = bs_legit_aa.think(arg_389_0)
+	bs_legit_aa.is_working = bs_v1139
+	if bs_v1139 then
+		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		return
+	end
+
+	-- 5. NORMAL DEFENSIVE AA - Overrides Safe Head
+	local bs_safe_head_on = false
+	pcall(function()
+		bs_safe_head_on = bs_safe_head.think(arg_389_0)
+	end)
+
+	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_2)
+
+	bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
+	if bs_v1138 == nil or not bs_v1138.allow_state:get() then
+		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
+		bs_legit_aa.is_working = false
+		pcall(function()
+			rage.antiaim:override_hidden_pitch(0)
+			rage.antiaim:override_hidden_yaw_offset(0)
+			bs_config.antiaim.fake_lag.limit:override(nil)
+			bs_config.antiaim.angles.pitch:override("Disabled")
+			bs_config.antiaim.angles.yaw:override("disabled")
+			bs_config.antiaim.angles.yaw_add:override(0)
+			bs_config.antiaim.angles.yaw_base:override("Local View")
+			bs_config.antiaim.angles.yaw_modifier:override("Disabled")
+			bs_config.antiaim.angles.modifier_offset:override(0)
+			bs_config.antiaim.angles.body_yaw:override(false)
+			bs_config.antiaim.angles.inverter:override(false)
+			bs_config.antiaim.angles.left_limit:override(0)
+			bs_config.antiaim.angles.right_limit:override(0)
+			bs_config.antiaim.angles.options:override({})
+			bs_config.antiaim.angles.disable_yaw_modifiers:override(false)
+			bs_config.antiaim.angles.body_freestanding:override(false)
+			bs_config.antiaim.angles.freestanding:override(false)
+			bs_config.antiaim.angles.freestand_peek:override("Off")
+			bs_config.antiaim.angles.avoid_backstab:override(false)
+			bs_config.rage.main.double_tap_lag_options:override("On Peek")
+			bs_config.rage.main.hide_shots_options:override("Favor Fire Rate")
+		end)
+		return
+	end
+
+	bs_aa_state_obj.avoid_backstab = bs_menu.antiaim.general.avoid_backstab.switch:get()
+	bs_async_flip(arg_389_1)
+
+	pcall(function()
+		local var_389_18_1 = bs_v1138
+		if var_389_18_1 and var_389_18_1.abf_on_shot and var_389_18_1.abf_on_shot:get() and arg_389_0.in_attack and not bs_anti_brute.on_shot_last_attack then
+			bs_v591({ name = "?", time = globals.curtime }, true, true)
+			pcall(function()
+				local var_389_18_2 = bs_menu.info and bs_menu.info.notify
+				local var_389_18_3 = var_389_18_2 and var_389_18_2.col_abf_hit and var_389_18_2.col_abf_hit:get() or color(255, 160, 80, 255)
+				bs_notify.new({
+					"anti-bruteforce triggered by ",
+					"local shot",
+					" due to on-shot impact - angle shifted"
+				}, var_389_18_3)
+			end)
+		end
+		bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
+	end)
+
+	if arg_389_0.choked_commands == 0 then
+		bs_v734 = not bs_v734
+	end
+
 	bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_safe_head_on)
 	pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 
-	-- Anti-brute must run AFTER yaw initialization and defensive evaluation,
-	-- but BEFORE body yaw consumes _lr_left/_lr_right
 	if not bs_v1142 and not bs_safe_head_on then
-		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_v1138)
+		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, arg_389_2)
 	end
 
 	if not bs_safe_head_on then
 		bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 	end
 
-	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
-	bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_v1138)
+	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, arg_389_1, arg_389_2)
+	bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
 
 	local bs_fake_duck_on = false
 	pcall(function()
@@ -12243,12 +12206,11 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 	end
 
-	-- Safe Head only runs when NO active defensive profile (Game Events or other Defensive AA)
-	-- Defensive AA has priority over Safe Head; Safe Head must not interrupt or override defensive output
-	local bs_any_defensive_active = bs_defensive_mgr.is_active or (bs_defensive_mgr.game_events_hold_switch and bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload and bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek and bs_defensive_mgr.game_events_hold_peek > 0)
+	-- 6. SAFE HEAD - Only when NO higher priority active
+	local bs_any_defensive_active = bs_defensive_mgr.is_active or bs_force_game_events
 	local bs_v1140 = false
 	if not bs_any_defensive_active then
-		bs_v1140 = bs_safe_head.update(arg_389_0, bs_aa_state_obj, bs_v1138)
+		bs_v1140 = bs_safe_head.update(arg_389_0, bs_aa_state_obj, arg_389_1)
 	end
 
 	bs_freestanding.get_side(arg_389_0)
@@ -12259,40 +12221,21 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		bs_def_snap.apply(arg_389_0, bs_aa_state_obj, bs_v1132, bs_v1133, bs_v1134)
 	else
 		bs_def_snap.active = false
-
 		bs_def_snap.reset_snap()
 	end
 
-	-- Manual/freestanding run LAST so they always win (highest priority).
-	-- Freestanding first, then manual (manual overrides freestanding if both active).
-	bs_v1141 = bs_freestanding.think()
-
-	if bs_v1141 then
-		bs_freestanding.update(arg_389_0, bs_aa_state_obj, bs_v1138)
-	end
-
-	bs_manual_yaw.update(arg_389_0, bs_aa_state_obj, bs_v1138)
-
+	-- Final commit (Normal AA / Defensive AA / Safe Head output)
 	bs_aa_state_obj:run()
 
 	bs_v1135 = bs_menu.antiaim.general.freestanding
-
-	if bs_v1135 and bs_v1135.static and bs_v1135.static:get() and bs_v1141 then
+	if bs_v1135 and bs_v1135.static and bs_v1135.static:get() and bs_fs_active then
 		bs_v1136 = rage.antiaim:get_target()
 		bs_v1137 = rage.antiaim:get_target(true)
-
 		if bs_v1136 and bs_v1137 and math.fmod(math.abs(bs_v1136 - bs_v1137), 360) > 5 then
 			bs_config.antiaim.angles.body_yaw:override(false)
 		end
 	end
 end
-
-events.createmove(function(arg_391_0)
-	local var_391_0 = entity.get_local_player()
-	local var_391_1 = bs_legit_aa.think(arg_391_0)
-
-	bs_aa_updater.update(arg_391_0, bs_get_state.get(var_391_1), var_391_0)
-end)
 events.round_start(function()
 	bs_v416 = 0
 	bs_v423 = 0

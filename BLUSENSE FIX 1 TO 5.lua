@@ -12134,7 +12134,23 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		return
 	end
 
-	-- 4. LEGIT AA - Overrides Defensive AA & Safe Head
+	-- 4. SAFE HEAD - Right below Manual AA, overrides everything below
+	local bs_safe_head_on = false
+	pcall(function()
+		bs_safe_head_on = bs_safe_head.think(arg_389_0)
+	end)
+	if bs_safe_head_on then
+		bs_defensive_mgr.is_active = false
+		bs_legit_aa.is_working = false
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		bs_safe_head.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		return
+	end
+
+	-- 5. LEGIT AA - Overrides Defensive AA & Normal AA
 	local bs_v1139 = bs_legit_aa.think(arg_389_0)
 	bs_legit_aa.is_working = bs_v1139
 	if bs_v1139 then
@@ -12144,12 +12160,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		return
 	end
 
-	-- 5. NORMAL DEFENSIVE AA - Overrides Safe Head
-	local bs_safe_head_on = false
-	pcall(function()
-		bs_safe_head_on = bs_safe_head.think(arg_389_0)
-	end)
-
+	-- 6. NORMAL DEFENSIVE AA - Overrides Normal AA
 	bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
 	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 
@@ -12236,12 +12247,8 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 	end
 
-	-- 6. SAFE HEAD - Only when NO higher priority active
-	local bs_any_defensive_active = bs_defensive_mgr.is_active or bs_force_game_events
+	-- Safe Head already returned early above if active
 	local bs_v1140 = false
-	if not bs_any_defensive_active then
-		bs_v1140 = bs_safe_head.update(arg_389_0, bs_aa_state_obj, arg_389_1)
-	end
 
 	bs_freestanding.get_side(arg_389_0)
 

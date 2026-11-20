@@ -1329,6 +1329,9 @@ bs_v597.hide_shots = bs_v606:combo(bs_fmt("hide shots"), {
 	"favor fire rate",
 	"favor fake lag",
 	"break lc"
+}):depend({
+	bs_v597.select,
+	true
 })
 bs_aa_general.break_lc = bs_v597
 bs_v597.air_exploit = bs_grp_icon2:switch("\v\f<bug>\r  Air Exploit (Lag Comp)"):depend({
@@ -9332,6 +9335,16 @@ function bs_v328(arg_329_0)
 	bs_v316[arg_329_0] = 0
 end
 
+-- Game Events Defensive lifecycle tracking
+bs_defensive_mgr.game_events_was_active = false
+bs_defensive_mgr.game_events_armed = true  -- allows fresh duration on first event
+
+function bs_defensive_mgr.reset_game_events_state()
+	bs_v316["game events"] = 0
+	bs_defensive_mgr.game_events_was_active = false
+	bs_defensive_mgr.game_events_armed = true
+end
+
 function bs_v341(arg_330_0, arg_330_1, arg_330_2, arg_330_3)
 	if arg_330_0 == "off" then
 		return nil
@@ -9695,6 +9708,22 @@ local var_336_13
 			end
 		end
 
+		-- Game Events Defensive lifecycle: track activation/expire to give each event a fresh duration
+		local var_336_13_is_ge = (var_336_14 == "game events")
+		if var_336_13_is_ge then
+			if not bs_defensive_mgr.game_events_was_active and bs_defensive_mgr.game_events_armed then
+				bs_v316["game events"] = 0
+				bs_defensive_mgr.game_events_armed = false
+			end
+			bs_defensive_mgr.game_events_was_active = true
+		else
+			if bs_defensive_mgr.game_events_was_active then
+				bs_defensive_mgr.game_events_armed = true
+				bs_v316["game events"] = 0
+				bs_defensive_mgr.game_events_was_active = false
+			end
+		end
+
 		if not var_336_15 or not var_336_15.enable:get() then
 		var_336_1()
 
@@ -9795,6 +9824,7 @@ function bs_v384()
 	bs_defensive_mgr.def_ind_latch.is_working = false
 	bs_defensive_mgr.def_ind_latch.reset_time = 0
 	bs_defensive_mgr.def_ind_latch.triggered_state = nil
+	bs_defensive_mgr.reset_game_events_state()
 	bs_v120 = {}
 	bs_v104 = {}
 	bs_v89 = {}
@@ -12027,7 +12057,6 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		end)
 		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
 	else
-		bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_safe_head_on)
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 	end
 

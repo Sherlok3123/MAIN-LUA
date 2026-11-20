@@ -10697,7 +10697,7 @@ bs_v678 = 1
 bs_v689 = 0
 bs_v700 = 0
 bs_v710 = false
-bs_v721 = false
+bs_v721 = {}
 bs_v734 = false
 bs_v746 = {}
 bs_v756 = {}
@@ -10948,6 +10948,10 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 	local var_374_0 = false
 	local var_374_18 = nil
 	arg_374_1._at_target_offset = 0
+
+	if not arg_374_2 then
+		return
+	end
 
 	if arg_374_2.yaw_base and arg_374_2.yaw_base:get() == "at target" then
 		local var_374_1 = entity.get_local_player()
@@ -11266,6 +11270,10 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 end
 
 function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_3)
+	if not arg_376_2 then
+		return
+	end
+
 	if not arg_376_2.body_yaw:get() then
 		arg_376_1.body_yaw = false
 		arg_376_1._lr_side = false
@@ -11550,6 +11558,10 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 end
 
 function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_3)
+	if not arg_377_2 then
+		return
+	end
+
 	bs_v1106 = arg_377_2.modifier:get()
 	bs_v1107 = arg_377_2.modifier_mode:get()
 	bs_v1108 = arg_377_2.randomize:get()
@@ -11972,7 +11984,7 @@ end
 -- #############################################################################
 -- #  [SEC-18] ANTI-AIM MAIN UPDATE (ORCHESTRATOR) - Unified Priority Gate
 -- #############################################################################
-function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
+function bs_aa_updater.update(arg_389_0, arg_389_1)
 	update_fakelag(arg_389_0)
 	bs_aa_state_obj:define()
 	pcall(function()
@@ -12069,6 +12081,15 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 	if bs_force_game_events then
 		bs_defensive_mgr.is_active = false
 		bs_legit_aa.is_working = false
+
+		-- Apply "game events" preset (yaw, body_yaw, modifier)
+		local bs_v1138_ge = bs_aa_updater.get_preset("game events")
+		if bs_v1138_ge then
+			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, "game events")
+			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, "game events")
+			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, "game events")
+		end
+
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
@@ -12187,7 +12208,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 	pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 
 	if not bs_v1142 and not bs_safe_head_on then
-		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, arg_389_2)
+		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_v1138)
 	end
 
 	if not bs_safe_head_on then
@@ -12243,6 +12264,24 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		end
 	end
 end
+
+-- Main anti-aim createmove callback
+events.createmove(function(cmd)
+	local local_player = entity.get_local_player()
+
+	if not local_player or not local_player:is_alive() then
+		return
+	end
+
+	local state_name = bs_get_state.get(bs_legit_aa.is_working)
+
+	if not state_name then
+		return
+	end
+
+	bs_aa_updater.update(cmd, state_name)
+end)
+
 events.round_start(function()
 	bs_v416 = 0
 	bs_v423 = 0
@@ -18162,9 +18201,7 @@ events.createmove(function(arg_102_1)
 	end
 
 	bs_super_toss.target_angles.y = arg_102_1.view_angles.y + yaw_difference
-	arg_102_1.view_angles.y = arg_102_1.view_angles.y + yaw_difference
 	bs_super_toss.target_angles.x = math.clamp(arg_102_1.view_angles.x + pitch_difference, -89, 89)
-	arg_102_1.view_angles.x = math.clamp(arg_102_1.view_angles.x + pitch_difference, -89, 89)
 end)
 
 bs_v131 = nil

@@ -9696,19 +9696,42 @@ function bs_defensive_mgr.update(arg_336_0, arg_336_1, arg_336_2, arg_336_3)
 	end
 
 local var_336_13
-		local var_336_14 = arg_336_2 == "game events" and "game events" or arg_336_3 and "safe head" or var_336_2 and "manual aa" or var_336_3 and "freestanding" or arg_336_2
-		local var_336_15 = var_336_0.settings[var_336_14]
+		local var_336_14
+		local var_336_15
 
-		-- Sustain: once defensive triggers on safe head, hold it for a few ticks
-		-- even if the safe head check flickers on/off between frames
-		if var_336_14 == "safe head" and arg_336_3 then
-			bs_defensive_mgr.safe_head_hold = 4
-		end
-		if bs_defensive_mgr.safe_head_hold and bs_defensive_mgr.safe_head_hold > 0 then
-			bs_defensive_mgr.safe_head_hold = bs_defensive_mgr.safe_head_hold - 1
-			if bs_defensive_mgr.safe_head_hold > 0 and not arg_336_3 then
+		if arg_336_2 == "game events" then
+			var_336_14 = "game events"
+			var_336_15 = var_336_0.settings[var_336_14]
+		else
+			local var_336_18 = var_336_0.settings[arg_336_2]
+			local var_336_19 = var_336_18 and var_336_18.enable and var_336_18.enable:get() or false
+
+			if var_336_19 then
+				var_336_14 = arg_336_2
+				var_336_15 = var_336_18
+			elseif arg_336_3 then
 				var_336_14 = "safe head"
 				var_336_15 = var_336_0.settings["safe head"]
+				if var_336_14 == "safe head" and arg_336_3 then
+					bs_defensive_mgr.safe_head_hold = 4
+				end
+			elseif var_336_2 then
+				var_336_14 = "manual aa"
+				var_336_15 = var_336_0.settings["manual aa"]
+			elseif var_336_3 then
+				var_336_14 = "freestanding"
+				var_336_15 = var_336_0.settings["freestanding"]
+			else
+				var_336_14 = arg_336_2
+				var_336_15 = var_336_0.settings[var_336_14]
+			end
+
+			if bs_defensive_mgr.safe_head_hold and bs_defensive_mgr.safe_head_hold > 0 then
+				bs_defensive_mgr.safe_head_hold = bs_defensive_mgr.safe_head_hold - 1
+				if bs_defensive_mgr.safe_head_hold > 0 and not arg_336_3 and not var_336_19 then
+					var_336_14 = "safe head"
+					var_336_15 = var_336_0.settings["safe head"]
+				end
 			end
 		end
 
@@ -9731,10 +9754,10 @@ local var_336_13
 		end
 
 		if not var_336_15 or not var_336_15.enable:get() then
-		var_336_1()
+			var_336_1()
 
-		return false
-	end
+			return false
+		end
 
 	if var_336_15.activation_mode:get() == "hittable only" and not bs_safe_head.threat_can_hit_head(entity.get_threat(true) or entity.get_threat()) then
 		var_336_1()

@@ -11286,6 +11286,11 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 	local var_376_3 = 0
 	local var_376_13 = 0
 
+	-- Initialize per-state delay arrays
+	if bs_v721 == nil then bs_v721 = {} end
+	if bs_v274_toggle == nil then bs_v274_toggle = {} end
+	if bs_v721_counter == nil then bs_v721_counter = {} end
+
 	arg_376_1.body_yaw = true
 
 	if var_376_1 == "jitter" then
@@ -11298,23 +11303,24 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 				local var_376_6 = var_376_5 + 2
 
 				if arg_376_0.choked_commands == 0 then
-					bs_v721 = var_376_6 > arg_376_0.tickcount % (var_376_6 * 2)
+					bs_v721_counter[arg_376_3] = (bs_v721_counter[arg_376_3] or 0) + 1
+					bs_v721[arg_376_3] = var_376_6 > bs_v721_counter[arg_376_3] % (var_376_6 * 2)
 				end
 
-				var_376_2 = bs_v721
+				var_376_2 = bs_v721[arg_376_3]
 			else
 				var_376_2 = bs_v734
 			end
 		elseif var_376_4 == "random" then
 			if arg_376_0.choked_commands == 0 then
-				if bs_v274_toggle == nil then bs_v274_toggle = false end
-				bs_v274_toggle = not bs_v274_toggle
-				if bs_v274_toggle then
-					bs_v274[arg_376_3] = bs_v274[arg_376_3] - 1
+				if bs_v274_toggle[arg_376_3] == nil then bs_v274_toggle[arg_376_3] = false end
+				bs_v274_toggle[arg_376_3] = not bs_v274_toggle[arg_376_3]
+				if bs_v274_toggle[arg_376_3] then
+					bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
 				end
 			end
 
-			if bs_v274[arg_376_3] <= 0 then
+			if (bs_v274[arg_376_3] or 0) <= 0 then
 				local var_376_7 = arg_376_2.body_yaw_delay_random_min and arg_376_2.body_yaw_delay_random_min:get() or 2
 				local var_376_8 = arg_376_2.body_yaw_delay_random_max and arg_376_2.body_yaw_delay_random_max:get() or 6
 
@@ -11327,18 +11333,18 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 
 			if arg_376_0.choked_commands == 0 then
-				bs_v721 = bs_v302[arg_376_3]
+				bs_v721[arg_376_3] = bs_v302[arg_376_3]
 			end
 
-			var_376_2 = bs_v721
+			var_376_2 = bs_v721[arg_376_3]
 		elseif var_376_4 == "sequence" then
 			local var_376_9 = arg_376_2.body_yaw_delay_seq_count and arg_376_2.body_yaw_delay_seq_count:get() or 3
 
-			if var_376_9 < bs_v288[arg_376_3] then
+			if var_376_9 < (bs_v288[arg_376_3] or 0) then
 				bs_v288[arg_376_3] = 1
 			end
 
-			local var_376_10 = arg_376_2["body_yaw_delay_seq_s" .. bs_v288[arg_376_3]]
+			local var_376_10 = arg_376_2["body_yaw_delay_seq_s" .. (bs_v288[arg_376_3] or 1)]
 			local var_376_11 = var_376_10 and var_376_10:get() or 4
 
 			if var_376_11 == 0 then
@@ -11360,9 +11366,9 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 
 				bs_v274[arg_376_3] = 0
 			else
-				bs_v274[arg_376_3] = bs_v274[arg_376_3] - 1
+				bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
 
-				if bs_v274[arg_376_3] <= 0 then
+				if (bs_v274[arg_376_3] or 0) <= 0 then
 					bs_v274[arg_376_3] = var_376_11 + 2
 					bs_v302[arg_376_3] = not bs_v302[arg_376_3]
 
@@ -11381,10 +11387,10 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 
 			if arg_376_0.choked_commands == 0 then
-				bs_v721 = bs_v302[arg_376_3]
+				bs_v721[arg_376_3] = bs_v302[arg_376_3]
 			end
 
-			var_376_2 = bs_v721
+			var_376_2 = bs_v721[arg_376_3]
 		end
 
 		var_376_12 = arg_376_2.left_limit and arg_376_2.left_limit:get() or 60
@@ -11410,23 +11416,24 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 				local var_376_6 = var_376_5 + 2
 
 				if arg_376_0.choked_commands == 0 then
-					bs_v721 = var_376_6 > arg_376_0.tickcount % (var_376_6 * 2)
+					bs_v721_counter[arg_376_3] = (bs_v721_counter[arg_376_3] or 0) + 1
+					bs_v721[arg_376_3] = var_376_6 > bs_v721_counter[arg_376_3] % (var_376_6 * 2)
 				end
 
-				var_376_2 = bs_v721
+				var_376_2 = bs_v721[arg_376_3]
 			else
 				var_376_2 = bs_v734
 			end
 		elseif var_376_4 == "random" then
 			if arg_376_0.choked_commands == 0 then
-				if bs_v274_toggle == nil then bs_v274_toggle = false end
-				bs_v274_toggle = not bs_v274_toggle
-				if bs_v274_toggle then
-					bs_v274[arg_376_3] = bs_v274[arg_376_3] - 1
+				if bs_v274_toggle[arg_376_3] == nil then bs_v274_toggle[arg_376_3] = false end
+				bs_v274_toggle[arg_376_3] = not bs_v274_toggle[arg_376_3]
+				if bs_v274_toggle[arg_376_3] then
+					bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
 				end
 			end
 
-			if bs_v274[arg_376_3] <= 0 then
+			if (bs_v274[arg_376_3] or 0) <= 0 then
 				local var_376_7 = arg_376_2.body_yaw_delay_random_min and arg_376_2.body_yaw_delay_random_min:get() or 2
 				local var_376_8 = arg_376_2.body_yaw_delay_random_max and arg_376_2.body_yaw_delay_random_max:get() or 6
 
@@ -11439,18 +11446,18 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 
 			if arg_376_0.choked_commands == 0 then
-				bs_v721 = bs_v302[arg_376_3]
+				bs_v721[arg_376_3] = bs_v302[arg_376_3]
 			end
 
-			var_376_2 = bs_v721
+			var_376_2 = bs_v721[arg_376_3]
 		elseif var_376_4 == "sequence" then
 			local var_376_9 = arg_376_2.body_yaw_delay_seq_count and arg_376_2.body_yaw_delay_seq_count:get() or 3
 
-			if var_376_9 < bs_v288[arg_376_3] then
+			if var_376_9 < (bs_v288[arg_376_3] or 0) then
 				bs_v288[arg_376_3] = 1
 			end
 
-			local var_376_10 = arg_376_2["body_yaw_delay_seq_s" .. bs_v288[arg_376_3]]
+			local var_376_10 = arg_376_2["body_yaw_delay_seq_s" .. (bs_v288[arg_376_3] or 1)]
 			local var_376_11 = var_376_10 and var_376_10:get() or 4
 
 			if var_376_11 == 0 then
@@ -11472,9 +11479,9 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 
 				bs_v274[arg_376_3] = 0
 			else
-				bs_v274[arg_376_3] = bs_v274[arg_376_3] - 1
+				bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
 
-				if bs_v274[arg_376_3] <= 0 then
+				if (bs_v274[arg_376_3] or 0) <= 0 then
 					bs_v274[arg_376_3] = var_376_11 + 2
 					bs_v302[arg_376_3] = not bs_v302[arg_376_3]
 
@@ -11493,10 +11500,10 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 
 			if arg_376_0.choked_commands == 0 then
-				bs_v721 = bs_v302[arg_376_3]
+				bs_v721[arg_376_3] = bs_v302[arg_376_3]
 			end
 
-			var_376_2 = bs_v721
+			var_376_2 = bs_v721[arg_376_3]
 		end
 
 		-- On flip, pick random limit between the set limit (fake_limit_random) and 60
@@ -12120,9 +12127,9 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		bs_safe_head_on = bs_safe_head.think(arg_389_0)
 	end)
 
-	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_2)
-
 	bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
+	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
+
 	if bs_v1138 == nil or not bs_v1138.allow_state:get() then
 		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
 		bs_legit_aa.is_working = false
@@ -12187,7 +12194,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1, arg_389_2)
 		bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 	end
 
-	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, arg_389_1, arg_389_2)
+	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 	bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
 
 	local bs_fake_duck_on = false

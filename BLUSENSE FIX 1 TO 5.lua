@@ -21106,19 +21106,25 @@ end)
 -- override and feeds the ESP flag. Enemy roster is refreshed from entity.get_players
 -- each tick so defensive detection and the state conditions have live data.
 do
-	local function bs_extrapolate(origin, velocity, ticks)
+	local function bs_extrapolate(origin, velocity, ticks, is_grounded)
 		local tickinterval = globals.tickinterval
+		if not tickinterval or tickinterval <= 0 then tickinterval = 0.015625 end
 		local gravity = cvar.sv_gravity:float() * tickinterval
-		local jump_impulse = cvar.sv_jump_impulse:float() * tickinterval
 		local pos = vector(origin.x, origin.y, origin.z)
 		local vel = vector(velocity.x, velocity.y, velocity.z)
-		local z_acc = vel.z > 0 and -gravity or jump_impulse
 		for _ = 1, ticks do
 			local prev = pos
+			-- Horizontal: constant velocity
+			-- Vertical: gravity always acts downward when airborne
+			local next_z = pos.z + vel.z * tickinterval
+			if not is_grounded then
+				next_z = next_z - 0.5 * gravity * tickinterval
+				vel.z = vel.z - gravity
+			end
 			pos = vector(
 				pos.x + vel.x * tickinterval,
 				pos.y + vel.y * tickinterval,
-				pos.z + (vel.z + z_acc) * tickinterval
+				next_z
 			)
 			if utils.trace_line(prev, pos, nil, 2).fraction <= 0.99 then
 				return prev
@@ -21431,15 +21437,17 @@ end
 				return state
 	end
 
-	-- Resolve the condition-based hitchance for the current threat.
+-- Resolve the condition-based hitchance for the current threat.
 local function decide_for_threat(rec, local_player, threat)
 		local cond_hc = 0
 		local state = nil
+		local matched_state = nil  -- Store original matched condition for extrapolation config
 		local wc = bs_select_weapon_class()
 		if bs_v718.hc_conditions and bs_v718.hc_conditions:get() and threat then
 			local hc_weapon = (wc == "awp" or wc == "scout" or wc == "auto")
 			if hc_weapon then
 				state = resolve_state(rec, local_player, threat, wc)
+				matched_state = state  -- Remember which condition actually matched
 				if state then
 					local en = bs_v718.hc_cond_state_en[state]
 					local sl = bs_v718.hc_cond_state_sl[state]
@@ -21459,13 +21467,12 @@ local function decide_for_threat(rec, local_player, threat)
 				-- Defensive/LC hitchance override: when the ENEMY is in defensive state,
 				-- apply LC/Defensive condition HC (rec.def tracks enemy defensive state)
 				if rec and rec.def and bs_v718.hc_conditions and bs_v718.hc_conditions:get() then
-					state = "lc"
-					local en = bs_v718.hc_cond_state_en and bs_v718.hc_cond_state_en["lc"]
-					local sl = bs_v718.hc_cond_state_sl and bs_v718.hc_cond_state_sl["lc"]
-					local enabled = false
-					pcall(function() enabled = en and en:get() end)
-					if enabled and sl then
-						local wsl = sl[wc]
+					local lc_en = bs_v718.hc_cond_state_en and bs_v718.hc_cond_state_en["lc"]
+					local lc_sl = bs_v718.hc_cond_state_sl and bs_v718.hc_cond_state_sl["lc"]
+					local lc_enabled = false
+					pcall(function() lc_enabled = lc_en and lc_en:get() end)
+					if lc_enabled and lc_sl then
+						local wsl = lc_sl[wc]
 						local wpen = bs_v718.hc_cond_state_wpn and bs_v718.hc_cond_state_wpn["lc"] and bs_v718.hc_cond_state_wpn["lc"][wc]
 						local wpen_on = true
 						if wpen then pcall(function() wpen_on = wpen:get() end) end
@@ -21474,52 +21481,72 @@ local function decide_for_threat(rec, local_player, threat)
 							pcall(function() cond_hc = math.max(cond_hc or 0, def_hc) end)
 						end
 					end
+					-- NOTE: do NOT change 'state' or 'matched_state' here; extrapolation must use original matched condition's config
 				end
 
 				-- Extrapolation per condition per weapon: if the matched condition has extrapolation enabled for this weapon, run prediction
 				local bs_hc_before_ext = cond_hc or 0
-				if state and cond_hc > 0 and threat then
-					local ext_en = bs_v718.hc_cond_state_ext_en and bs_v718.hc_cond_state_ext_en[state] and bs_v718.hc_cond_state_ext_en[state][wc]
+				local extrapolation_applied = false
+				if matched_state and cond_hc > 0 and threat then
+					local ext_en = bs_v718.hc_cond_state_ext_en and bs_v718.hc_cond_state_ext_en[matched_state] and bs_v718.hc_cond_state_ext_en[matched_state][wc]
 					local ext_on = false
 					if ext_en then pcall(function() ext_on = ext_en:get() end) end
 					if ext_on then
 						local pred_ticks = 3
-						local ticks_sl = bs_v718.hc_cond_state_ext_ticks and bs_v718.hc_cond_state_ext_ticks[state] and bs_v718.hc_cond_state_ext_ticks[state][wc]
+						local ticks_sl = bs_v718.hc_cond_state_ext_ticks and bs_v718.hc_cond_state_ext_ticks[matched_state] and bs_v718.hc_cond_state_ext_ticks[matched_state][wc]
 						if ticks_sl then pcall(function() pred_ticks = ticks_sl:get() or 3 end) end
-						if pred_ticks ~= 0 then
+						if pred_ticks > 0 then
 							local ep = nil
 							local evel = nil
 							pcall(function() ep = threat:get_origin() end)
 							pcall(function() evel = threat.m_vecVelocity end)
-							if ep and evel then
-								local pred_pos = bs_extrapolate(ep, evel, pred_ticks)
-								local dx = pred_pos.x - ep.x
-								local dy = pred_pos.y - ep.y
-								local pred_dist = math.sqrt(dx * dx + dy * dy)
-								-- Velocity per tick (units per tick)
-								local tick_interval = globals.tickinterval or 0.015625
-								local vel_per_tick = math.sqrt(evel.x * evel.x + evel.y * evel.y) * tick_interval
-								-- Inverse exponential: more movement per tick = exponentially lower HC
-								-- Base curve: HC = base_hc * exp(-k * vel_per_tick)
-								-- k tuned so 100u/tick ≈ 50% HC reduction, 200u/tick ≈ 75% reduction
-								local k = 0.00693  -- ln(2) / 100
-								local penalty_factor = math.exp(-k * vel_per_tick)
-								cond_hc = math.floor(cond_hc * penalty_factor + 0.5)
-								-- Clamp minimum
-								if cond_hc < 5 then cond_hc = 5 end
-								-- Halve HC for auto snipers
-								if wc == "auto" then
-									cond_hc = math.floor(cond_hc * 0.5 + 0.5)
-								end
-								if cond_hc ~= bs_hc_before_ext then
-									local tgt_name = "?"
-									pcall(function() tgt_name = threat:get_name() end)
-									bs_hc_extrapolated_target = tgt_name
-									bs_hc_extrapolated_hc = cond_hc
+							-- Grounded check for physics
+							local is_grounded = false
+							pcall(function() is_grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
+							if ep and evel and evel.x and evel.y and evel.z then
+								-- Validate inputs
+								local vx, vy, vz = evel.x, evel.y, evel.z
+								if vx == vx and vy == vy and vz == vz and  -- not NaN
+								   vx ~= math.huge and vy ~= math.huge and vz ~= math.huge then  -- not inf
+									local pred_pos = bs_extrapolate(ep, evel, pred_ticks, is_grounded)
+									if pred_pos and pred_pos.x and pred_pos.y then
+										local dx = pred_pos.x - ep.x
+										local dy = pred_pos.y - ep.y
+										local pred_dist_2d = math.sqrt(dx * dx + dy * dy)
+										-- Predicted horizontal displacement per tick (units per tick)
+										local tick_interval = globals.tickinterval or 0.015625
+										local pred_disp_per_tick = pred_dist_2d / pred_ticks
+										-- Hitchance adjustment based on predicted displacement per tick
+										-- More predicted movement per tick = harder to hit = lower HC
+										-- Use a configurable curve: HC = base_hc * exp(-k * pred_disp_per_tick)
+										-- k = ln(2) / 100 means 100u/tick predicted displacement = 50% HC
+										local k = 0.00693
+										local penalty_factor = math.exp(-k * pred_disp_per_tick)
+										cond_hc = math.floor(cond_hc * penalty_factor + 0.5)
+										-- Minimum clamp BEFORE weapon-specific adjustments
+										if cond_hc < 5 then cond_hc = 5 end
+										-- Halve HC for auto snipers (after min clamp)
+										if wc == "auto" then
+											cond_hc = math.floor(cond_hc * 0.5 + 0.5)
+											if cond_hc < 5 then cond_hc = 5 end
+										end
+										extrapolation_applied = true
+										if cond_hc ~= bs_hc_before_ext then
+											local tgt_name = "?"
+											pcall(function() tgt_name = threat:get_name() end)
+											bs_hc_extrapolated_target = tgt_name
+											bs_hc_extrapolated_hc = cond_hc
+										end
+									end
 								end
 							end
 						end
 					end
+				end
+				-- Clear extrapolation reporting when not applied
+				if not extrapolation_applied then
+					bs_hc_extrapolated_target = nil
+					bs_hc_extrapolated_hc = nil
 				end
 			end
 		end

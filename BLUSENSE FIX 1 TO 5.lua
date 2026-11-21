@@ -8889,6 +8889,15 @@ bs_v577 = ""
 bs_v585 = 0
 bs_defensive_mgr = {}
 bs_defensive_mgr.is_active = false
+
+function bs_defensive_mgr.cleanup()
+	bs_defensive_mgr.is_active = false
+
+	pcall(function() bs_config.antiaim.angles.hidden:override(false) end)
+	rage.antiaim:override_hidden_pitch(0)
+	rage.antiaim:override_hidden_yaw_offset(0)
+end
+
 bs_v591 = {
 	active_until = 0,
 	active = false,
@@ -9744,13 +9753,7 @@ function bs_defensive_mgr.update(arg_336_0, arg_336_1, arg_336_2, arg_336_3)
 		return var_336_0.settings and var_336_0.settings[state_key], state_key
 	end
 
-	local function var_336_1()
-		bs_defensive_mgr.is_active = false
-
-		pcall(function() bs_config.antiaim.angles.hidden:override(false) end)
-		rage.antiaim:override_hidden_pitch(0)
-		rage.antiaim:override_hidden_yaw_offset(0)
-	end
+	local var_336_1 = bs_defensive_mgr.cleanup
 
 	local var_336_2 = bs_manual_yaw.think()
 	local var_336_3 = bs_freestanding.think()
@@ -12156,7 +12159,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 
 	bs_force_game_events = (not bs_ge_fakelag_block) and ((bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek > 0))
 	if bs_force_game_events then
-		bs_defensive_mgr.is_active = false
+		bs_defensive_mgr.cleanup()
 		bs_legit_aa.is_working = false
 		if arg_389_1 then
 			bs_async_flip(arg_389_1)
@@ -12200,7 +12203,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_lc_trigger_on = bs_break_lc.should_force(arg_389_0)
 	end)
 	if bs_lc_trigger_on then
-		bs_defensive_mgr.is_active = false
+		bs_defensive_mgr.cleanup()
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
@@ -12346,7 +12349,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_fs_active = bs_freestanding.think()
 	end)
 	if bs_fs_active then
-		bs_defensive_mgr.is_active = false
+		bs_defensive_mgr.cleanup()
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
@@ -12362,7 +12365,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_manual_active = bs_manual_yaw.think()
 	end)
 	if bs_manual_active then
-		bs_defensive_mgr.is_active = false
+		bs_defensive_mgr.cleanup()
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
@@ -12374,7 +12377,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 
 	-- 4. SAFE HEAD - Right below Manual AA, overrides everything below
 	if bs_safe_head_on then
-		bs_defensive_mgr.is_active = false
+		bs_defensive_mgr.cleanup()
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
@@ -12389,7 +12392,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 
 	if bs_v1138 == nil or not bs_v1138.allow_state:get() then
-		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
+		if bs_defensive_mgr then bs_defensive_mgr.cleanup() end
 		bs_legit_aa.is_working = false
 		pcall(function()
 			rage.antiaim:override_hidden_pitch(0)
@@ -12462,7 +12465,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 			rage.antiaim:override_hidden_yaw_offset(0)
 			bs_config.antiaim.fake_lag.limit:override(14)
 		end)
-		if bs_defensive_mgr then bs_defensive_mgr.is_active = false end
+		if bs_defensive_mgr then bs_defensive_mgr.cleanup() end
 	else
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 	end
@@ -21120,7 +21123,18 @@ do
 	local MAX_VEL_SAMPLES = 12
 	local VEL_SAMPLE_LIFETIME = 0.5 -- seconds
 
+	-- Finite number validation helper
+	local function is_finite(n)
+		return n == n and n ~= math.huge and n ~= -math.huge
+	end
+
+	local function validate_vec3(v)
+		return v and is_finite(v.x) and is_finite(v.y) and is_finite(v.z)
+	end
+
 	local function add_vel_sample(rec, vel, now)
+		if not validate_vec3(vel) then return end
+		if not is_finite(now) then return end
 		if not rec.vel_samples then rec.vel_samples = {} end
 		rec.vel_samples[#rec.vel_samples + 1] = { x = vel.x, y = vel.y, z = vel.z, time = now }
 		-- Trim old samples
@@ -21129,26 +21143,70 @@ do
 		end
 	end
 
+	-- Estimate acceleration from velocity history using linear regression over last N samples
+	-- Returns { accel = {x,y,z}, accel_var = variance_of_accel_estimates } or nil
 	local function estimate_acceleration(rec)
 		local samples = rec.vel_samples
 		if not samples or #samples < 3 then return nil end
-		-- Use first and last of last 3 samples for average acceleration over the period
-		local n = #samples
-		local s1, s3 = samples[n-2], samples[n]
-		local dt = s3.time - s1.time
-		if dt <= 0 then return nil end
-		-- Average acceleration = (v3 - v1) / dt
-		local accel_x = (s3.x - s1.x) / dt
-		local accel_y = (s3.y - s1.y) / dt
-		-- Check for extreme acceleration (filter noise/teleports)
-		local accel_mag = math.sqrt(accel_x * accel_x + accel_y * accel_y)
-		if accel_mag > 10000 then return nil end -- unrealistic, likely noise/teleport
-		return { x = accel_x, y = accel_y }
+		-- Use last up to 6 samples for acceleration estimation
+		local n = math.min(#samples, 6)
+		local start_idx = #samples - n + 1
+		
+		-- Compute acceleration estimates between consecutive samples
+		local accel_estimates = {}
+		for i = start_idx + 1, #samples do
+			local s1 = samples[i-1]
+			local s2 = samples[i]
+			local dt = s2.time - s1.time
+			if dt > 0 and is_finite(dt) then
+				local ax = (s2.x - s1.x) / dt
+				local ay = (s2.y - s1.y) / dt
+				local az = (s2.z - s1.z) / dt
+				if is_finite(ax) and is_finite(ay) and is_finite(az) then
+					local mag = math.sqrt(ax*ax + ay*ay + az*az)
+					if mag < 10000 then -- filter extreme outliers
+						accel_estimates[#accel_estimates + 1] = { x = ax, y = ay, z = az }
+					end
+				end
+			end
+		end
+		
+		if #accel_estimates < 2 then return nil end
+		
+		-- Mean acceleration
+		local mean_x, mean_y, mean_z = 0, 0, 0
+		for _, a in ipairs(accel_estimates) do
+			mean_x = mean_x + a.x
+			mean_y = mean_y + a.y
+			mean_z = mean_z + a.z
+		end
+		mean_x = mean_x / #accel_estimates
+		mean_y = mean_y / #accel_estimates
+		mean_z = mean_z / #accel_estimates
+		
+		-- Variance of acceleration estimates (this IS estimation uncertainty)
+		local var_x, var_y, var_z = 0, 0, 0
+		for _, a in ipairs(accel_estimates) do
+			var_x = var_x + (a.x - mean_x)^2
+			var_y = var_y + (a.y - mean_y)^2
+			var_z = var_z + (a.z - mean_z)^2
+		end
+		var_x = var_x / #accel_estimates
+		var_y = var_y / #accel_estimates
+		var_z = var_z / #accel_estimates
+		
+		local accel_var = var_x + var_y + var_z
+		
+		return { x = mean_x, y = mean_y, z = mean_z, accel_var = accel_var }
 	end
 
-	local function velocity_stability(rec)
+	-- Velocity stability: measures direction consistency (not magnitude)
+	-- Returns stability factor [0,1] and also velocity trend for variance calculation
+	local function velocity_stability_and_trend(rec)
 		local samples = rec.vel_samples
-		if not samples or #samples < 2 then return 1.0 end -- no history = max uncertainty
+		if not samples or #samples < 2 then 
+			return 0.0, nil -- 0 stability when insufficient history
+		end
 		-- Compute velocity direction consistency
 		local dir_changes = 0
 		local total = 0
@@ -21163,30 +21221,81 @@ do
 				total = total + 1
 			end
 		end
-		if total == 0 then return 1.0 end
-		return 1.0 - (dir_changes / total) -- 1.0 = perfectly consistent
+		local stability = (total == 0) and 1.0 or (1.0 - (dir_changes / total))
+		
+		-- Also compute linear velocity trend (for residual variance)
+		-- Simple linear fit: v(t) = v0 + a*t
+		if #samples >= 3 then
+			local t0 = samples[1].time
+			local sum_t, sum_t2 = 0, 0
+			local sum_vx, sum_vy, sum_vz = 0, 0, 0
+			local sum_tvx, sum_tvy, sum_tvz = 0, 0, 0
+			for _, s in ipairs(samples) do
+				local dt = s.time - t0
+				sum_t = sum_t + dt
+				sum_t2 = sum_t2 + dt*dt
+				sum_vx = sum_vx + s.x
+				sum_vy = sum_vy + s.y
+				sum_vz = sum_vz + s.z
+				sum_tvx = sum_tvx + dt * s.x
+				sum_tvy = sum_tvy + dt * s.y
+				sum_tvz = sum_tvz + dt * s.z
+			end
+			local n = #samples
+			local denom = n * sum_t2 - sum_t * sum_t
+			local trend = nil
+			if denom > 0 then
+				local ax = (n * sum_tvx - sum_t * sum_vx) / denom
+				local ay = (n * sum_tvy - sum_t * sum_vy) / denom
+				local az = (n * sum_tvz - sum_t * sum_vz) / denom
+				local v0x = (sum_vx - ax * sum_t) / n
+				local v0y = (sum_vy - ay * sum_t) / n
+				local v0z = (sum_vz - az * sum_t) / n
+				trend = { v0 = { x = v0x, y = v0y, z = v0z }, a = { x = ax, y = ay, z = az } }
+			end
+			return stability, trend
+		end
+		return stability, nil
 	end
 
 	local function bs_extrapolate(origin, velocity, acceleration, ticks, is_grounded)
+		-- Validate inputs
+		if not origin or not velocity then return origin end
+		if not is_finite(origin.x) or not is_finite(origin.y) or not is_finite(origin.z) then return origin end
+		if not is_finite(velocity.x) or not is_finite(velocity.y) or not is_finite(velocity.z) then return origin end
+		
 		local tickinterval = globals.tickinterval
-		if not tickinterval or tickinterval <= 0 then tickinterval = 0.015625 end
-		local gravity = cvar.sv_gravity:float() * tickinterval
+		if not tickinterval or tickinterval <= 0 or not is_finite(tickinterval) then tickinterval = 0.015625 end
+		local gravity = cvar.sv_gravity:float() -- units/s², NOT multiplied by tickinterval
+		if not is_finite(gravity) or gravity <= 0 then gravity = 800.0 end
+		
 		local pos = vector(origin.x, origin.y, origin.z)
 		local vel = vector(velocity.x, velocity.y, velocity.z)
 		local accel = acceleration or { x = 0, y = 0, z = 0 }
+		
+		-- NOTE: utils.trace_line with mask 2 performs a line trace, NOT a hull trace.
+		-- It does not account for player collision hull size. This is a conservative
+		-- approximation; actual player movement may collide earlier.
+		
 		for _ = 1, ticks do
 			local prev = pos
-			-- Constant acceleration per tick: pos += vel*dt + 0.5*accel*dt², then vel += accel*dt
 			local dt = tickinterval
+			-- Constant acceleration per tick: pos += vel*dt + 0.5*accel*dt²
+			local vertical_accel = (is_grounded and 0 or -gravity) + (accel.z or 0)
 			pos = vector(
-				pos.x + vel.x * dt + 0.5 * accel.x * dt * dt,
-				pos.y + vel.y * dt + 0.5 * accel.y * dt * dt,
-				pos.z + vel.z * dt + 0.5 * (accel.z + (is_grounded and 0 or -gravity)) * dt * dt
+				pos.x + vel.x * dt + 0.5 * (accel.x or 0) * dt * dt,
+				pos.y + vel.y * dt + 0.5 * (accel.y or 0) * dt * dt,
+				pos.z + vel.z * dt + 0.5 * vertical_accel * dt * dt
 			)
-			-- Update velocity for next tick
-			vel.x = vel.x + accel.x * dt
-			vel.y = vel.y + accel.y * dt
-			vel.z = vel.z + (accel.z + (is_grounded and 0 or -gravity)) * dt
+			-- Validate predicted position
+			if not is_finite(pos.x) or not is_finite(pos.y) or not is_finite(pos.z) then
+				return prev
+			end
+			-- Update velocity for next tick: vel += accel*dt
+			vel.x = vel.x + (accel.x or 0) * dt
+			vel.y = vel.y + (accel.y or 0) * dt
+			vel.z = vel.z + vertical_accel * dt
+			
 			if utils.trace_line(prev, pos, nil, 2).fraction <= 0.99 then
 				return prev
 			end
@@ -21198,47 +21307,86 @@ do
 		-- Variance model: position_variance + t^2 * velocity_variance + 0.25 * t^4 * acceleration_variance
 		-- Base position uncertainty (hitbox/sub-tick interpolation)
 		local pos_var = 4.0 -- ~2 unit radius squared
-		-- Velocity variance from sample spread
-		local vel_var = 0.0
+		
 		local samples = rec.vel_samples
+		local vel_var = 0.0
+		local trend = nil
+		local stability = 0.0
+		
 		if samples and #samples >= 2 then
-			local mean_x, mean_y = 0, 0
-			for _, s in ipairs(samples) do
-				mean_x = mean_x + s.x
-				mean_y = mean_y + s.y
+			stability, trend = velocity_stability_and_trend(rec)
+			stability = math.max(0.1, stability) -- minimum stability floor
+			
+			-- Velocity variance from RESIDUALS around estimated trend, not raw mean
+			if trend then
+				-- Use trend residuals
+				local var_sum = 0
+				local t0 = samples[1].time
+				for _, s in ipairs(samples) do
+					local dt = s.time - t0
+					local pred_vx = trend.v0.x + trend.a.x * dt
+					local pred_vy = trend.v0.y + trend.a.y * dt
+					local pred_vz = trend.v0.z + trend.a.z * dt
+					local dx = s.x - pred_vx
+					local dy = s.y - pred_vy
+					local dz = s.z - pred_vz
+					var_sum = var_sum + dx*dx + dy*dy + dz*dz
+				end
+				vel_var = var_sum / #samples
+			else
+				-- Fallback: raw variance around mean (but inflated for insufficient samples)
+				local mean_x, mean_y, mean_z = 0, 0, 0
+				for _, s in ipairs(samples) do
+					mean_x = mean_x + s.x
+					mean_y = mean_y + s.y
+					mean_z = mean_z + s.z
+				end
+				mean_x = mean_x / #samples
+				mean_y = mean_y / #samples
+				mean_z = mean_z / #samples
+				local var_sum = 0
+				for _, s in ipairs(samples) do
+					local dx = s.x - mean_x
+					local dy = s.y - mean_y
+					local dz = s.z - mean_z
+					var_sum = var_sum + dx*dx + dy*dy + dz*dz
+				end
+				vel_var = var_sum / #samples
+				-- Inflate for insufficient samples
+				if #samples < 6 then
+					vel_var = vel_var * (6.0 / #samples)
+				end
 			end
-			mean_x = mean_x / #samples
-			mean_y = mean_y / #samples
-			local var_sum = 0
-			for _, s in ipairs(samples) do
-				local dx = s.x - mean_x
-				local dy = s.y - mean_y
-				var_sum = var_sum + dx*dx + dy*dy
-			end
-			vel_var = var_sum / #samples
 		else
-			vel_var = 5000.0 -- HIGH variance when no history (was 500)
+			vel_var = 5000.0 -- HIGH variance when no history
+			stability = 0.1
 		end
-		-- Acceleration variance: uncertainty in acceleration estimate, not magnitude
-		local accel = estimate_acceleration(rec)
+		
+		-- Acceleration variance from estimate_acceleration (which returns estimation uncertainty)
+		local accel_info = estimate_acceleration(rec)
 		local accel_var = 0.0
-		if accel then
-			-- If we have an estimate, use small variance based on sample consistency
-			-- Higher variance = less confident in the acceleration estimate
-			local stability = velocity_stability(rec)
-			accel_var = (accel.x*accel.x + accel.y*accel.y) * (1.0 + (1.0 - stability) * 10.0)
+		if accel_info and accel_info.accel_var then
+			accel_var = accel_info.accel_var
+			-- Inflate by stability (unstable direction = less confident in acceleration estimate)
+			accel_var = accel_var * (1.0 + (1.0 - stability) * 10.0)
 		else
-			accel_var = 50000.0 -- VERY high when unestimated (was 10000)
+			accel_var = 50000.0 -- VERY high when unestimated
 		end
+		
+		-- Time factors
+		if not is_finite(tick_interval) or tick_interval <= 0 then tick_interval = 0.015625 end
 		local t = pred_ticks * tick_interval
+		if not is_finite(t) then t = pred_ticks * 0.015625 end
 		local t2 = t * t
 		local t4 = t2 * t2
+		
 		local variance = pos_var + t2 * vel_var + 0.25 * t4 * accel_var
-		-- Stability factor (direction consistency)
-		local stability = velocity_stability(rec)
-		variance = variance / math.max(0.1, stability) -- unstable movement increases variance
+		variance = variance / stability -- unstable movement increases variance
+		
 		-- Clamp
-		if variance > 25000 then variance = 25000 end
+		if not is_finite(variance) or variance > 25000 then variance = 25000 end
+		if variance < 0 then variance = 0 end
+		
 		return math.sqrt(variance) -- standard deviation in units
 	end
 	local S = {
@@ -21619,53 +21767,56 @@ local function decide_for_threat(rec, local_player, threat)
 							local is_grounded = false
 							pcall(function() is_grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
 							if ep and evel and evel.x and evel.y and evel.z then
-								-- Validate inputs
-								local vx, vy, vz = evel.x, evel.y, evel.z
-								if vx == vx and vy == vy and vz == vz and  -- not NaN
-								   vx ~= math.huge and vy ~= math.huge and vz ~= math.huge then  -- not inf
+								-- Validate inputs using helper
+								if is_finite(evel.x) and is_finite(evel.y) and is_finite(evel.z) and
+								   is_finite(ep.x) and is_finite(ep.y) and is_finite(ep.z) then
 									-- Estimate acceleration from history
 									local accel = estimate_acceleration(rec)
 									local pred_pos = bs_extrapolate(ep, evel, accel, pred_ticks, is_grounded)
-									if pred_pos and pred_pos.x and pred_pos.y then
+									-- Validate predicted position
+									if pred_pos and is_finite(pred_pos.x) and is_finite(pred_pos.y) and is_finite(pred_pos.z) then
 										local dx = pred_pos.x - ep.x
 										local dy = pred_pos.y - ep.y
 										local pred_dist_2d = math.sqrt(dx * dx + dy * dy)
 										-- Compute prediction uncertainty (confidence)
 										local tick_interval = globals.tickinterval or 0.015625
 										local uncertainty = compute_prediction_uncertainty(rec, pred_ticks, tick_interval)
-										-- Effective hitbox margin: how much position error we can tolerate
-										-- Based on weapon and condition - conservative baseline
-										local hitbox_margin = 12.0 -- ~head hitbox radius in units
-										-- Uncertainty ratio: 0 = perfect prediction, 1 = uncertainty equals margin, >1 = unreliable
-										local uncertainty_ratio = uncertainty / hitbox_margin
-										-- Confidence factor: 1.0 = full confidence, approaches 0 as uncertainty grows
-										local confidence = 1.0 / (1.0 + uncertainty_ratio * uncertainty_ratio)
-										-- Predicted displacement per tick
-										local pred_disp_per_tick = pred_dist_2d / pred_ticks
-										-- Base penalty from predicted movement difficulty
-										local k_movement = 0.00693 -- ln(2)/100, 100u/tick = 50% HC
-										local movement_penalty = math.exp(-k_movement * pred_disp_per_tick)
-										-- Confidence-adjusted penalty: when confidence is low, reduce the penalty
-										-- (we don't trust the prediction enough to heavily penalize)
-										-- When confidence=1: full penalty. When confidence=0.5: half penalty.
-										local effective_penalty = 1.0 - confidence * (1.0 - movement_penalty)
-										cond_hc = math.floor(cond_hc * effective_penalty + 0.5)
-										-- Minimum clamp BEFORE weapon-specific adjustments
-										if cond_hc < 5 then cond_hc = 5 end
-										-- Halve HC for auto snipers (after min clamp)
-										if wc == "auto" then
-											cond_hc = math.floor(cond_hc * 0.5 + 0.5)
+										-- Validate uncertainty
+										if is_finite(uncertainty) and uncertainty >= 0 then
+											-- Effective hitbox margin: how much position error we can tolerate
+											-- Based on weapon and condition - conservative baseline
+											local hitbox_margin = 12.0 -- ~head hitbox radius in units
+											-- Uncertainty ratio: 0 = perfect prediction, 1 = uncertainty equals margin, >1 = unreliable
+											local uncertainty_ratio = uncertainty / hitbox_margin
+											-- Confidence factor: 1.0 = full confidence, approaches 0 as uncertainty grows
+											local confidence = 1.0 / (1.0 + uncertainty_ratio * uncertainty_ratio)
+											-- Predicted displacement per tick
+											local pred_disp_per_tick = pred_dist_2d / pred_ticks
+											-- Base penalty from predicted movement difficulty
+											local k_movement = 0.00693 -- ln(2)/100, 100u/tick = 50% HC
+											local movement_penalty = math.exp(-k_movement * pred_disp_per_tick)
+											-- Confidence-adjusted penalty: when confidence is low, reduce the penalty
+											-- (we don't trust the prediction enough to heavily penalize)
+											-- When confidence=1: full penalty. When confidence=0.5: half penalty.
+											local effective_penalty = 1.0 - confidence * (1.0 - movement_penalty)
+											cond_hc = math.floor(cond_hc * effective_penalty + 0.5)
+											-- Minimum clamp BEFORE weapon-specific adjustments
 											if cond_hc < 5 then cond_hc = 5 end
+											-- Halve HC for auto snipers (after min clamp)
+											if wc == "auto" then
+												cond_hc = math.floor(cond_hc * 0.5 + 0.5)
+												if cond_hc < 5 then cond_hc = 5 end
+											end
+											extrapolation_applied = true
+											-- Store detailed reporting info
+											bs_hc_extrapolated_target = enemy_name(threat)
+											bs_hc_extrapolated_hc = cond_hc
+											bs_hc_extrapolation_confidence = confidence
+											bs_hc_extrapolation_uncertainty = uncertainty
+											bs_hc_extrapolation_pred_ticks = pred_ticks
+											bs_hc_extrapolation_pred_dist = pred_dist_2d
+											bs_hc_extrapolation_accel = accel
 										end
-										extrapolation_applied = true
-										-- Store detailed reporting info
-										bs_hc_extrapolated_target = enemy_name(threat)
-										bs_hc_extrapolated_hc = cond_hc
-										bs_hc_extrapolation_confidence = confidence
-										bs_hc_extrapolation_uncertainty = uncertainty
-										bs_hc_extrapolation_pred_ticks = pred_ticks
-										bs_hc_extrapolation_pred_dist = pred_dist_2d
-										bs_hc_extrapolation_accel = accel
 									end
 								end
 							end

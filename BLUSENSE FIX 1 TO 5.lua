@@ -12866,9 +12866,14 @@ events.aim_ack(function(arg_401_0)
 			bs_v1166 = bs_v1145 and "" or " / mismatched hg ~ " .. bs_v1176 .. "(" .. bs_v1178 .. ")"
 			bs_v1168 = bs_v1147 and "" or " / mismatched dmg ~ " .. tostring(arg_401_0.damage) .. "(" .. tostring(arg_401_0.wanted_damage) .. ")"
 
-			print_raw(("%s · hit %s's %s for %s damage ( HC ~ %s%% / R.HC ~ %s%% / bt ~ %sticks%s )"):format(bs_v1156, bs_v1162, bs_v1176, tostring(arg_401_0.damage), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.backtrack), bs_v1166, bs_hc_extrapolated_target and " / extrapolated ~ " .. bs_hc_extrapolated_target .. " ~ " .. tostring(bs_hc_extrapolated_hc) .. "%%" or ""))
+			print_raw(("%s · hit %s's %s for %s damage ( HC ~ %s%% / R.HC ~ %s%% / bt ~ %sticks%s )"):format(bs_v1156, bs_v1162, bs_v1176, tostring(arg_401_0.damage), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.backtrack), bs_v1166, bs_hc_extrapolated_target and (" / extrap ~ " .. bs_hc_extrapolated_target .. " ~ " .. tostring(bs_hc_extrapolated_hc) .. "%% / conf " .. string.format("%.2f", bs_hc_extrapolation_confidence or 0) .. " / unc " .. string.format("%.1fu", bs_hc_extrapolation_uncertainty or 0)) or ""))
 			bs_hc_extrapolated_target = nil
 			bs_hc_extrapolated_hc = nil
+			bs_hc_extrapolation_confidence = nil
+			bs_hc_extrapolation_uncertainty = nil
+			bs_hc_extrapolation_pred_ticks = nil
+			bs_hc_extrapolation_pred_dist = nil
+			bs_hc_extrapolation_accel = nil
 		end
 	else
 		if not bs_v1143.log_misses:get() then
@@ -13029,9 +13034,14 @@ events.aim_ack(function(arg_401_0)
 			bs_v1163 = bs_v706(bs_v1154, bs_v1175:to_hex())
 			bs_v1167 = bs_v1150 and "" or " / mismatched hg ~ " .. bs_v1146 .. "(" .. (bs_v1148 or "?") .. ")"
 
-			print_raw(("%s · missed %s's %s due to %s ( HC ~ %s%% / R.HC ~ %s%% / dmg ~ %s / bt ~ %sticks%s )"):format(bs_v1158, bs_v1163, bs_v1146, tostring(arg_401_0.state or "unknown"), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.wanted_damage), tostring(arg_401_0.backtrack or 0), bs_v1167, bs_hc_extrapolated_target and " / extrapolated ~ " .. bs_hc_extrapolated_target .. " ~ " .. tostring(bs_hc_extrapolated_hc) .. "%%" or ""))
+			print_raw(("%s · missed %s's %s due to %s ( HC ~ %s%% / R.HC ~ %s%% / dmg ~ %s / bt ~ %sticks%s )"):format(bs_v1158, bs_v1163, bs_v1146, tostring(arg_401_0.state or "unknown"), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.wanted_damage), tostring(arg_401_0.backtrack or 0), bs_v1167, bs_hc_extrapolated_target and (" / extrap ~ " .. bs_hc_extrapolated_target .. " ~ " .. tostring(bs_hc_extrapolated_hc) .. "%% / conf " .. string.format("%.2f", bs_hc_extrapolation_confidence or 0) .. " / unc " .. string.format("%.1fu", bs_hc_extrapolation_uncertainty or 0)) or ""))
 			bs_hc_extrapolated_target = nil
 			bs_hc_extrapolated_hc = nil
+			bs_hc_extrapolation_confidence = nil
+			bs_hc_extrapolation_uncertainty = nil
+			bs_hc_extrapolation_pred_ticks = nil
+			bs_hc_extrapolation_pred_dist = nil
+			bs_hc_extrapolation_accel = nil
 		end
 	end
 end)
@@ -21106,31 +21116,141 @@ end)
 -- override and feeds the ESP flag. Enemy roster is refreshed from entity.get_players
 -- each tick so defensive detection and the state conditions have live data.
 do
-	local function bs_extrapolate(origin, velocity, ticks, is_grounded)
+	-- Movement history per enemy for acceleration estimation and prediction confidence
+	local MAX_VEL_SAMPLES = 12
+	local VEL_SAMPLE_LIFETIME = 0.5 -- seconds
+
+	local function add_vel_sample(rec, vel, now)
+		if not rec.vel_samples then rec.vel_samples = {} end
+		rec.vel_samples[#rec.vel_samples + 1] = { x = vel.x, y = vel.y, z = vel.z, time = now }
+		-- Trim old samples
+		while #rec.vel_samples > MAX_VEL_SAMPLES or (#rec.vel_samples > 0 and now - rec.vel_samples[1].time > VEL_SAMPLE_LIFETIME) do
+			table.remove(rec.vel_samples, 1)
+		end
+	end
+
+	local function estimate_acceleration(rec)
+		local samples = rec.vel_samples
+		if not samples or #samples < 3 then return nil end
+		-- Use last 3 samples for robust estimate
+		local n = #samples
+		local s1, s2, s3 = samples[n-2], samples[n-1], samples[n]
+		local dt1 = s2.time - s1.time
+		local dt2 = s3.time - s2.time
+		if dt1 <= 0 or dt2 <= 0 then return nil end
+		-- Acceleration = (v3 - v2)/dt2 - (v2 - v1)/dt1 averaged
+		local ax1 = (s2.x - s1.x) / dt1
+		local ay1 = (s2.y - s1.y) / dt1
+		local ax2 = (s3.x - s2.x) / dt2
+		local ay2 = (s3.y - s2.y) / dt2
+		-- Check for extreme acceleration (filter noise/teleports)
+		local accel_x = (ax2 - ax1) * 0.5
+		local accel_y = (ay2 - ay1) * 0.5
+		local accel_mag = math.sqrt(accel_x * accel_x + accel_y * accel_y)
+		if accel_mag > 10000 then return nil end -- unrealistic, likely noise/teleport
+		return { x = accel_x, y = accel_y }
+	end
+
+	local function velocity_stability(rec)
+		local samples = rec.vel_samples
+		if not samples or #samples < 2 then return 1.0 end -- no history = max uncertainty
+		-- Compute velocity direction consistency
+		local dir_changes = 0
+		local total = 0
+		for i = 2, #samples do
+			local p, c = samples[i-1], samples[i]
+			local dp = math.sqrt(p.x*p.x + p.y*p.y)
+			local dc = math.sqrt(c.x*c.x + c.y*c.y)
+			if dp > 10 and dc > 10 then
+				local dot = (p.x*c.x + p.y*c.y) / (dp * dc)
+				dot = math.max(-1, math.min(1, dot))
+				if dot < 0.7 then dir_changes = dir_changes + 1 end -- >45 deg change
+				total = total + 1
+			end
+		end
+		if total == 0 then return 1.0 end
+		return 1.0 - (dir_changes / total) -- 1.0 = perfectly consistent
+	end
+
+	local function bs_extrapolate(origin, velocity, acceleration, ticks, is_grounded)
 		local tickinterval = globals.tickinterval
 		if not tickinterval or tickinterval <= 0 then tickinterval = 0.015625 end
 		local gravity = cvar.sv_gravity:float() * tickinterval
+		local time = ticks * tickinterval
 		local pos = vector(origin.x, origin.y, origin.z)
 		local vel = vector(velocity.x, velocity.y, velocity.z)
+		local accel = acceleration or { x = 0, y = 0, z = 0 }
+		-- Horizontal: constant acceleration model
+		-- pos = pos0 + v*t + 0.5*a*t^2
+		-- Vertical: gravity when airborne
+		local next_z = pos.z + vel.z * time
+		if not is_grounded then
+			next_z = next_z - 0.5 * gravity * time * time
+		end
+		-- We still step per tick for collision detection
 		for _ = 1, ticks do
 			local prev = pos
-			-- Horizontal: constant velocity
-			-- Vertical: gravity always acts downward when airborne
-			local next_z = pos.z + vel.z * tickinterval
+			-- Velocity integration with acceleration
+			vel.x = vel.x + accel.x * tickinterval
+			vel.y = vel.y + accel.y * tickinterval
 			if not is_grounded then
-				next_z = next_z - 0.5 * gravity * tickinterval
 				vel.z = vel.z - gravity
 			end
 			pos = vector(
 				pos.x + vel.x * tickinterval,
 				pos.y + vel.y * tickinterval,
-				next_z
+				pos.z + vel.z * tickinterval
 			)
 			if utils.trace_line(prev, pos, nil, 2).fraction <= 0.99 then
 				return prev
 			end
 		end
 		return pos
+	end
+
+	local function compute_prediction_uncertainty(rec, pred_ticks, tick_interval)
+		-- Variance model: position_variance + t^2 * velocity_variance + 0.25 * t^4 * acceleration_variance
+		-- Base position uncertainty (hitbox/sub-tick interpolation)
+		local pos_var = 4.0 -- ~2 unit radius squared
+		-- Velocity variance from sample spread
+		local vel_var = 0.0
+		local samples = rec.vel_samples
+		if samples and #samples >= 2 then
+			local mean_x, mean_y = 0, 0
+			for _, s in ipairs(samples) do
+				mean_x = mean_x + s.x
+				mean_y = mean_y + s.y
+			end
+			mean_x = mean_x / #samples
+			mean_y = mean_y / #samples
+			local var_sum = 0
+			for _, s in ipairs(samples) do
+				local dx = s.x - mean_x
+				local dy = s.y - mean_y
+				var_sum = var_sum + dx*dx + dy*dy
+			end
+			vel_var = var_sum / #samples
+		else
+			vel_var = 500.0 -- high variance when no history
+		end
+		-- Acceleration variance
+		local accel = estimate_acceleration(rec)
+		local accel_var = 0.0
+		if accel then
+			accel_var = accel.x*accel.x + accel.y*accel.y
+		else
+			accel_var = 10000.0 -- high when unestimated
+		end
+		local t = pred_ticks * tick_interval
+		local t2 = t * t
+		local t4 = t2 * t2
+		local variance = pos_var + t2 * vel_var + 0.25 * t4 * accel_var
+		-- Stability factor (direction consistency)
+		local stability = velocity_stability(rec)
+		variance = variance / math.max(0.1, stability) -- unstable movement increases variance
+		-- Clamp
+		if variance > 10000 then variance = 10000 end
+		return math.sqrt(variance) -- standard deviation in units
 	end
 	local S = {
 		enemies = {},            -- [idx] = { ent, name, hp, armor, alive, dormant, def, detected_until, samples, last_seen }
@@ -21241,6 +21361,12 @@ do
 		end
 
 		rec.def = defensive or (rec.detected_until or 0) > now
+		-- Record velocity sample for extrapolation
+		local vel = nil
+		pcall(function() vel = threat.m_vecVelocity end)
+		if vel and vel.x and vel.y and vel.z then
+			add_vel_sample(rec, vel, now)
+		end
 		return rec
 	end
 
@@ -21508,21 +21634,33 @@ local function decide_for_threat(rec, local_player, threat)
 								local vx, vy, vz = evel.x, evel.y, evel.z
 								if vx == vx and vy == vy and vz == vz and  -- not NaN
 								   vx ~= math.huge and vy ~= math.huge and vz ~= math.huge then  -- not inf
-									local pred_pos = bs_extrapolate(ep, evel, pred_ticks, is_grounded)
+									-- Estimate acceleration from history
+									local accel = estimate_acceleration(rec)
+									local pred_pos = bs_extrapolate(ep, evel, accel, pred_ticks, is_grounded)
 									if pred_pos and pred_pos.x and pred_pos.y then
 										local dx = pred_pos.x - ep.x
 										local dy = pred_pos.y - ep.y
 										local pred_dist_2d = math.sqrt(dx * dx + dy * dy)
-										-- Predicted horizontal displacement per tick (units per tick)
+										-- Compute prediction uncertainty (confidence)
 										local tick_interval = globals.tickinterval or 0.015625
+										local uncertainty = compute_prediction_uncertainty(rec, pred_ticks, tick_interval)
+										-- Effective hitbox margin: how much position error we can tolerate
+										-- Based on weapon and condition - conservative baseline
+										local hitbox_margin = 12.0 -- ~head hitbox radius in units
+										-- Uncertainty ratio: 0 = perfect prediction, 1 = uncertainty equals margin, >1 = unreliable
+										local uncertainty_ratio = uncertainty / hitbox_margin
+										-- Confidence factor: 1.0 = full confidence, approaches 0 as uncertainty grows
+										local confidence = 1.0 / (1.0 + uncertainty_ratio * uncertainty_ratio)
+										-- Predicted displacement per tick
 										local pred_disp_per_tick = pred_dist_2d / pred_ticks
-										-- Hitchance adjustment based on predicted displacement per tick
-										-- More predicted movement per tick = harder to hit = lower HC
-										-- Use a configurable curve: HC = base_hc * exp(-k * pred_disp_per_tick)
-										-- k = ln(2) / 100 means 100u/tick predicted displacement = 50% HC
-										local k = 0.00693
-										local penalty_factor = math.exp(-k * pred_disp_per_tick)
-										cond_hc = math.floor(cond_hc * penalty_factor + 0.5)
+										-- Base penalty from predicted movement difficulty
+										local k_movement = 0.00693 -- ln(2)/100, 100u/tick = 50% HC
+										local movement_penalty = math.exp(-k_movement * pred_disp_per_tick)
+										-- Confidence-adjusted penalty: when confidence is low, reduce the penalty
+										-- (we don't trust the prediction enough to heavily penalize)
+										-- When confidence=1: full penalty. When confidence=0.5: half penalty.
+										local effective_penalty = 1.0 - confidence * (1.0 - movement_penalty)
+										cond_hc = math.floor(cond_hc * effective_penalty + 0.5)
 										-- Minimum clamp BEFORE weapon-specific adjustments
 										if cond_hc < 5 then cond_hc = 5 end
 										-- Halve HC for auto snipers (after min clamp)
@@ -21531,12 +21669,14 @@ local function decide_for_threat(rec, local_player, threat)
 											if cond_hc < 5 then cond_hc = 5 end
 										end
 										extrapolation_applied = true
-										if cond_hc ~= bs_hc_before_ext then
-											local tgt_name = "?"
-											pcall(function() tgt_name = threat:get_name() end)
-											bs_hc_extrapolated_target = tgt_name
-											bs_hc_extrapolated_hc = cond_hc
-										end
+										-- Store detailed reporting info
+										bs_hc_extrapolated_target = enemy_name(threat)
+										bs_hc_extrapolated_hc = cond_hc
+										bs_hc_extrapolation_confidence = confidence
+										bs_hc_extrapolation_uncertainty = uncertainty
+										bs_hc_extrapolation_pred_ticks = pred_ticks
+										bs_hc_extrapolation_pred_dist = pred_dist_2d
+										bs_hc_extrapolation_accel = accel
 									end
 								end
 							end
@@ -21547,6 +21687,11 @@ local function decide_for_threat(rec, local_player, threat)
 				if not extrapolation_applied then
 					bs_hc_extrapolated_target = nil
 					bs_hc_extrapolated_hc = nil
+					bs_hc_extrapolation_confidence = nil
+					bs_hc_extrapolation_uncertainty = nil
+					bs_hc_extrapolation_pred_ticks = nil
+					bs_hc_extrapolation_pred_dist = nil
+					bs_hc_extrapolation_accel = nil
 				end
 			end
 		end
@@ -21614,6 +21759,10 @@ local function decide_for_threat(rec, local_player, threat)
 			end
 			if display_hc > 0 then parts[#parts + 1] = "HC" .. tostring(display_hc) end
 			if rec and rec.def then parts[#parts + 1] = "DEF" end
+			-- Extrapolation info
+			if bs_hc_extrapolated_target and bs_hc_extrapolation_confidence then
+				parts[#parts + 1] = "EXTRAP[" .. string.format("%.0f%%", bs_hc_extrapolation_confidence * 100) .. " / " .. string.format("%.1fu", bs_hc_extrapolation_uncertainty or 0) .. "]"
+			end
 			if #parts == 0 then return end
 			return "[" .. table.concat(parts, " ") .. "]"
 		end):create()
@@ -21622,14 +21771,19 @@ local function decide_for_threat(rec, local_player, threat)
 		S.esp_flag = esp_obj
 	end
 
-	local function reset()
+local function reset()
 		S.enemies = {}
 		S.stand_dwell = {}
 		release_overrides()
 		bs_active_hc_value = 0
-bs_active_hc_state = nil
-bs_hc_extrapolated_target = nil
-bs_hc_extrapolated_hc = nil
+		bs_active_hc_state = nil
+		bs_hc_extrapolated_target = nil
+		bs_hc_extrapolated_hc = nil
+		bs_hc_extrapolation_confidence = nil
+		bs_hc_extrapolation_uncertainty = nil
+		bs_hc_extrapolation_pred_ticks = nil
+		bs_hc_extrapolation_pred_dist = nil
+		bs_hc_extrapolation_accel = nil
 	end
 
 	events.createmove(function(cmd)

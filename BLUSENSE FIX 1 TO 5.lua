@@ -3950,13 +3950,13 @@ local bs_cond_states = { "noscope", "air", "lc", "stand", "below", "above", "ene
 local bs_cond_labels = { "No Scope", "In Air", "LC/Defensive", "Standing", "Below", "Above", "Enemy HP", "Enemy Moving" }
 for ci, cstate in ipairs(bs_cond_states) do
 	bs_v718.hc_cond_state_en[cstate] = bs_v718.hc_cond_gear:switch(bs_cond_labels[ci] .. " Enable"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] })
-	bs_v718.hc_cond_state_wlist[cstate] = bs_v718.hc_cond_gear:list(cstate .. " Weapon", { "awp", "auto", "scout" }):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true })
+	bs_v718.hc_cond_state_wlist[cstate] = bs_v718.hc_cond_gear:list(cstate .. " Weapon", { "awp", "auto_sniper", "scout" }):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true })
 	bs_v718.hc_cond_state_wpn[cstate] = {}
 	bs_v718.hc_cond_state_sl[cstate] = {}
 	bs_v718.hc_cond_state_ext_en[cstate] = {}
 	bs_v718.hc_cond_state_ext_ticks[cstate] = {}
 	local widx = 0
-	for _, hw in ipairs({ { key = "awp", label = "AWP" }, { key = "auto", label = "Auto" }, { key = "scout", label = "Scout" }, { key = "ak", label = "AK-47" } }) do
+	for _, hw in ipairs({ { key = "awp", label = "AWP" }, { key = "auto_sniper", label = "Auto-Sniper" }, { key = "scout", label = "Scout" }, { key = "ak", label = "AK-47" } }) do
 		widx = widx + 1
 		bs_v718.hc_cond_state_wpn[cstate][hw.key] = bs_v718.hc_cond_gear:switch("   " .. hw.label .. " Enable"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true }, { bs_v718.hc_cond_state_wlist[cstate], widx })
 		bs_v718.hc_cond_state_sl[cstate][hw.key] = bs_v718.hc_cond_gear:slider("   " .. hw.label .. " HC", 0, 100, 0, 1, function(v) if v == 0 then return "OFF" end return v .. "%" end):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true }, { bs_v718.hc_cond_state_wlist[cstate], widx }, { bs_v718.hc_cond_state_wpn[cstate][hw.key], true })
@@ -3967,6 +3967,10 @@ for ci, cstate in ipairs(bs_cond_states) do
 end
 
 -- Enemy HP threshold slider (global, used by "Enemy HP" condition)
+bs_v718.hc_cond_hp_threshold = {}
+for _, hw in ipairs({ { key = "awp", label = "AWP", widx = 1 }, { key = "auto_sniper", label = "Auto-Sniper", widx = 2 }, { key = "scout", label = "Scout", widx = 3 } }) do
+	bs_v718.hc_cond_hp_threshold[hw.key] = bs_v718.hc_cond_gear:slider("Enemy HP Threshold " .. hw.label, 0, 100, 50, 1):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "Enemy HP" }, { bs_v718.hc_cond_state_en["enemyhp"], true }, { bs_v718.hc_cond_state_wlist["enemyhp"], hw.widx }, { bs_v718.hc_cond_state_wpn["enemyhp"][hw.key], true })
+end
 
 bs_v621.aimbot = bs_v718
 
@@ -8325,13 +8329,14 @@ function bs_legit_aa.think(arg_277_0)
 end
 
 function bs_legit_aa.update(arg_278_0, arg_278_1, arg_278_2)
-	bs_legit_aa.is_working = bs_legit_aa.think(arg_278_0)
-
 	if not bs_legit_aa.is_working then
 		return
 	end
 
 	arg_278_0.in_use = false
+	if arg_278_0.buttons then
+		arg_278_0.buttons = bit.band(arg_278_0.buttons, bit.bnot(32))
+	end
 	arg_278_1.pitch = "Disabled"
 	arg_278_1.yaw_base = bs_menu.antiaim.general.legit_aa.mode:get()
 end
@@ -8649,7 +8654,7 @@ function bs_weapon_class(arg_302_0)
 	end
 
 	if var_302_0 == "CWeaponSCAR20" or var_302_0 == "CWeaponG3SG1" then
-		return "auto"
+		return "auto_sniper"
 	end
 
 	if var_302_1 == 1 or var_302_2 and var_302_2.is_revolver then
@@ -11092,6 +11097,15 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 			end
 		end
 
+		-- Priority: engine crosshair threat, then visible enemies nearest crosshair, then any live enemy nearest crosshair.
+		local var_374_5, var_374_6 = pcall(function()
+			return entity.get_threat(true)
+		end)
+
+		if var_374_5 and var_374_6 and var_374_19(var_374_6) then
+			var_374_4 = var_374_6
+		end
+
 		if not var_374_4 then
 			bs_iter_players(true, false, function(arg_375_0)
 				if not var_374_19(arg_375_0) then
@@ -11106,16 +11120,6 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 
 				var_374_20(arg_375_0)
 			end)
-		end
-
-		if not var_374_4 then
-			local var_374_5, var_374_6 = pcall(function()
-				return entity.get_threat()
-			end)
-
-			if var_374_5 and var_374_6 and var_374_19(var_374_6) then
-				var_374_4 = var_374_6
-			end
 		end
 
 		if not var_374_4 then
@@ -12158,18 +12162,22 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	end)
 
 	bs_force_game_events = (not bs_ge_fakelag_block) and ((bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek > 0))
+
+	-- Base state name for higher-priority systems (Game Events, LC) - computed without Legit AA
+	local bs_base_state_name = bs_get_state.get(false)
+
 	if bs_force_game_events then
 		bs_defensive_mgr.cleanup()
 		bs_legit_aa.is_working = false
-		if arg_389_1 then
-			bs_async_flip(arg_389_1)
+		if bs_base_state_name then
+			bs_async_flip(bs_base_state_name)
 
 			-- Apply current state's builder preset (Game Events overlays active state AA)
-			local bs_v1138_ge = bs_aa_updater.get_preset(arg_389_1)
+			local bs_v1138_ge = bs_aa_updater.get_preset(bs_base_state_name)
 			if bs_v1138_ge then
-				bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
-				bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
-				bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+				bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, bs_base_state_name)
+				bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, bs_base_state_name)
+				bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, bs_base_state_name)
 			end
 		else
 			-- No state resolved yet: apply minimal Game Events overlay
@@ -12207,13 +12215,13 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
-		local bs_v1138_lc = bs_aa_updater.get_preset(arg_389_1)
+		local bs_v1138_lc = bs_aa_updater.get_preset(bs_base_state_name)
 		if bs_v1138_lc then
-			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_lc, arg_389_1)
-			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_lc, arg_389_1)
-			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_lc, arg_389_1)
+			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_lc, bs_base_state_name)
+			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_lc, bs_base_state_name)
+			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_lc, bs_base_state_name)
 		end
-		bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		return
@@ -12228,8 +12236,8 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	-- Tickbase / choke customization per state (builder "tickbase" UI)
 	-- Overrides fakelag limit when state's choke mode is "custom"
 	-- ========================================================================
-	if bs_v570 and bs_v570[arg_389_1] then
-		local bs_choke_cfg = bs_v570[arg_389_1]
+	if bs_v570 and bs_v570[bs_base_state_name] then
+		local bs_choke_cfg = bs_v570[bs_base_state_name]
 		local bs_choke_mode = bs_choke_cfg.choke and bs_choke_cfg.choke:get()
 
 		if bs_choke_mode == "custom" then
@@ -12245,24 +12253,24 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 					bs_choke_min, bs_choke_max = bs_choke_max, bs_choke_min
 				end
 				if arg_389_0.choked_commands == 0 then
-					bs_choke_cur_val[arg_389_1] = math.random(bs_choke_min, bs_choke_max)
+					bs_choke_cur_val[bs_base_state_name] = math.random(bs_choke_min, bs_choke_max)
 				end
 			elseif bs_choke_method == "sequence" then
 				local bs_choke_steps = bs_choke_cfg.choke_sliders and bs_choke_cfg.choke_sliders:get() or 2
 				if arg_389_0.choked_commands == 0 then
-					local bs_choke_counter = (bs_choke_seq_counter[arg_389_1] or 0) + 1
+					local bs_choke_counter = (bs_choke_seq_counter[bs_base_state_name] or 0) + 1
 					if bs_choke_counter > bs_choke_steps then
 						bs_choke_counter = 1
 					end
-					bs_choke_seq_counter[arg_389_1] = bs_choke_counter
+					bs_choke_seq_counter[bs_base_state_name] = bs_choke_counter
 				end
-				local bs_step_cfg = bs_choke_cfg["choke1_" .. (bs_choke_seq_counter[arg_389_1] or 1)]
-				bs_choke_cur_val[arg_389_1] = bs_step_cfg and bs_step_cfg:get() or 4
+				local bs_step_cfg = bs_choke_cfg["choke1_" .. (bs_choke_seq_counter[bs_base_state_name] or 1)]
+				bs_choke_cur_val[bs_base_state_name] = bs_step_cfg and bs_step_cfg:get() or 4
 			end
 
-			if bs_choke_cur_val[arg_389_1] and bs_choke_cur_val[arg_389_1] > 0 then
+			if bs_choke_cur_val[bs_base_state_name] and bs_choke_cur_val[bs_base_state_name] > 0 then
 				pcall(function()
-					bs_config.antiaim.fake_lag.limit_pui:override(bs_choke_cur_val[arg_389_1])
+					bs_config.antiaim.fake_lag.limit_pui:override(bs_choke_cur_val[bs_base_state_name])
 				end)
 			end
 		end
@@ -12296,12 +12304,13 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	end
 
 	-- 1. LEGIT AA - Highest priority (matches TRUE SOURCE behavior)
+	-- Evaluate Legit AA once per command, reuse result
 	local bs_v1139 = bs_legit_aa.think(arg_389_0)
 	bs_legit_aa.is_working = bs_v1139
 	if bs_v1139 then
-		bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
-		bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
-		bs_async_flip(arg_389_1)
+		bs_v1138 = bs_aa_updater.get_preset(bs_base_state_name)
+		bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
+		bs_async_flip(bs_base_state_name)
 
 		pcall(function()
 			local var_389_18_1 = bs_v1138
@@ -12322,21 +12331,21 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 
 		
 
-		bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_safe_head_on)
+bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_safe_head_on)
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 
 		if not bs_v1142 and not bs_safe_head_on then
-			bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_v1138)
+bs_anti_brute.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_v1138)
 		end
 
 		if not bs_safe_head_on then
-			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
+bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
 		end
 
-		bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
-		bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
+bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 
-		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
@@ -12353,7 +12362,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
-		bs_freestanding.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_freestanding.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		return
@@ -12369,7 +12378,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
-		bs_manual_yaw.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_manual_yaw.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		return
@@ -12381,15 +12390,15 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
-		bs_safe_head.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_safe_head.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		return
 	end
 
 	-- 6. NORMAL DEFENSIVE AA - Overrides Normal AA
-	bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
-	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
+	bs_v1138 = bs_aa_updater.get_preset(bs_base_state_name)
+	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
 
 	if bs_v1138 == nil or not bs_v1138.allow_state:get() then
 		if bs_defensive_mgr then bs_defensive_mgr.cleanup() end
@@ -12421,7 +12430,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	end
 
 	bs_aa_state_obj.avoid_backstab = bs_menu.antiaim.general.avoid_backstab.switch:get()
-	bs_async_flip(arg_389_1)
+	bs_async_flip(bs_base_state_name)
 
 	pcall(function()
 		local var_389_18_1 = bs_v1138
@@ -12440,19 +12449,19 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
 	end)
 
-	bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_safe_head_on)
+	bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_safe_head_on)
 	pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 
 	if not bs_v1142 and not bs_safe_head_on then
-		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_v1138)
+		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_v1138)
 	end
 
 	if not bs_safe_head_on then
-		bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
+		bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
 	end
 
-	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
-	bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
+	bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 
 	local bs_fake_duck_on = false
 	pcall(function()
@@ -12475,7 +12484,7 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 
 	bs_freestanding.get_side(arg_389_0)
 
-	bs_v1131, bs_v1132, bs_v1133, bs_v1134 = bs_def_snap.think(arg_389_1)
+	bs_v1131, bs_v1132, bs_v1133, bs_v1134 = bs_def_snap.think(bs_base_state_name)
 
 	if bs_v1131 and not bs_v1140 then
 		bs_def_snap.apply(arg_389_0, bs_aa_state_obj, bs_v1132, bs_v1133, bs_v1134)
@@ -12507,9 +12516,8 @@ events.createmove(function(cmd)
 
 	-- Always run the orchestrator so Game Events can be evaluated
 	-- even when state resolution returns nil (Game Events is state-agnostic)
-	bs_legit_aa.is_working = bs_legit_aa.think(cmd)
-	local state_name = bs_get_state.get(bs_legit_aa.is_working)
-	bs_aa_updater.update(cmd, state_name)
+	-- Orchestrator now computes base state name internally and evaluates Legit AA once
+	bs_aa_updater.update(cmd, nil)
 end)
 
 events.round_start(function()
@@ -21123,6 +21131,13 @@ do
 	local MAX_VEL_SAMPLES = 12
 	local VEL_SAMPLE_LIFETIME = 0.5 -- seconds
 
+	-- Local player movement tracking for relative prediction
+	local LP_MAX_VEL_SAMPLES = 12
+	local LP_VEL_SAMPLE_LIFETIME = 0.5 -- seconds
+	local lp_vel_samples = {}
+	local lp_last_origin = nil
+	local lp_last_simtime = nil
+
 	-- Finite number validation helper
 	local function is_finite(n)
 		return n == n and n ~= math.huge and n ~= -math.huge
@@ -21141,6 +21156,252 @@ do
 		while #rec.vel_samples > MAX_VEL_SAMPLES or (#rec.vel_samples > 0 and now - rec.vel_samples[1].time > VEL_SAMPLE_LIFETIME) do
 			table.remove(rec.vel_samples, 1)
 		end
+	end
+
+	-- Local player velocity sample recording
+	local function lp_add_vel_sample(vel, now, origin, simtime)
+		if not validate_vec3(vel) then return end
+		if not is_finite(now) then return end
+		lp_vel_samples[#lp_vel_samples + 1] = { x = vel.x, y = vel.y, z = vel.z, time = now, origin_x = origin.x, origin_y = origin.y, origin_z = origin.z, simtime = simtime }
+		-- Trim old samples
+		while #lp_vel_samples > LP_MAX_VEL_SAMPLES or (#lp_vel_samples > 0 and now - lp_vel_samples[1].time > LP_VEL_SAMPLE_LIFETIME) do
+			table.remove(lp_vel_samples, 1)
+		end
+	end
+
+	-- Local player acceleration estimation
+	-- Returns { accel = {x,y,z}, accel_var = variance_of_accel_estimates } or nil
+	local function lp_estimate_acceleration()
+		local samples = lp_vel_samples
+		if not samples or #samples < 3 then return nil end
+		local n = math.min(#samples, 6)
+		local start_idx = #samples - n + 1
+		
+		local accel_estimates = {}
+		for i = start_idx + 1, #samples do
+			local s1 = samples[i-1]
+			local s2 = samples[i]
+			local dt = s2.time - s1.time
+			if dt > 0 and is_finite(dt) then
+				local ax = (s2.x - s1.x) / dt
+				local ay = (s2.y - s1.y) / dt
+				local az = (s2.z - s1.z) / dt
+				if is_finite(ax) and is_finite(ay) and is_finite(az) then
+					local mag = math.sqrt(ax*ax + ay*ay + az*az)
+					if mag < 10000 then
+						accel_estimates[#accel_estimates + 1] = { x = ax, y = ay, z = az }
+					end
+				end
+			end
+		end
+		
+		if #accel_estimates < 2 then return nil end
+		
+		local mean_x, mean_y, mean_z = 0, 0, 0
+		for _, a in ipairs(accel_estimates) do
+			mean_x = mean_x + a.x
+			mean_y = mean_y + a.y
+			mean_z = mean_z + a.z
+		end
+		mean_x = mean_x / #accel_estimates
+		mean_y = mean_y / #accel_estimates
+		mean_z = mean_z / #accel_estimates
+		
+		local var_x, var_y, var_z = 0, 0, 0
+		for _, a in ipairs(accel_estimates) do
+			var_x = var_x + (a.x - mean_x)^2
+			var_y = var_y + (a.y - mean_y)^2
+			var_z = var_z + (a.z - mean_z)^2
+		end
+		var_x = var_x / #accel_estimates
+		var_y = var_y / #accel_estimates
+		var_z = var_z / #accel_estimates
+		
+		local accel_var = var_x + var_y + var_z
+		
+		return { x = mean_x, y = mean_y, z = mean_z, accel_var = accel_var }
+	end
+
+	-- Local player velocity stability and trend
+	local function lp_velocity_stability_and_trend()
+		local samples = lp_vel_samples
+		if not samples or #samples < 2 then 
+			return 0.0, nil
+		end
+		local dir_changes = 0
+		local total = 0
+		for i = 2, #samples do
+			local p, c = samples[i-1], samples[i]
+			local dp = math.sqrt(p.x*p.x + p.y*p.y)
+			local dc = math.sqrt(c.x*c.x + c.y*c.y)
+			if dp > 10 and dc > 10 then
+				local dot = (p.x*c.x + p.y*c.y) / (dp * dc)
+				dot = math.max(-1, math.min(1, dot))
+				if dot < 0.7 then dir_changes = dir_changes + 1 end
+				total = total + 1
+			end
+		end
+		local stability = (total == 0) and 1.0 or (1.0 - (dir_changes / total))
+		
+		if #samples >= 3 then
+			local t0 = samples[1].time
+			local sum_t, sum_t2 = 0, 0
+			local sum_vx, sum_vy, sum_vz = 0, 0, 0
+			local sum_tvx, sum_tvy, sum_tvz = 0, 0, 0
+			for _, s in ipairs(samples) do
+				local dt = s.time - t0
+				sum_t = sum_t + dt
+				sum_t2 = sum_t2 + dt*dt
+				sum_vx = sum_vx + s.x
+				sum_vy = sum_vy + s.y
+				sum_vz = sum_vz + s.z
+				sum_tvx = sum_tvx + dt * s.x
+				sum_tvy = sum_tvy + dt * s.y
+				sum_tvz = sum_tvz + dt * s.z
+			end
+			local n = #samples
+			local denom = n * sum_t2 - sum_t * sum_t
+			local trend = nil
+			if denom > 0 then
+				local ax = (n * sum_tvx - sum_t * sum_vx) / denom
+				local ay = (n * sum_tvy - sum_t * sum_vy) / denom
+				local az = (n * sum_tvz - sum_t * sum_vz) / denom
+				local v0x = (sum_vx - ax * sum_t) / n
+				local v0y = (sum_vy - ay * sum_t) / n
+				local v0z = (sum_vz - az * sum_t) / n
+				trend = { v0 = { x = v0x, y = v0y, z = v0z }, a = { x = ax, y = ay, z = az } }
+			end
+			return stability, trend
+		end
+		return stability, nil
+	end
+
+	-- Local player prediction: predicts local player origin AND eye position
+	-- Returns { origin = vector, eye_pos = vector, velocity = vector } or nil
+	local function lp_predict(ticks, is_grounded, local_player)
+		if not local_player then return nil end
+		
+		-- Get current state
+		local cur_origin = nil
+		local cur_eye = nil
+		local cur_vel = nil
+		pcall(function() cur_origin = local_player:get_origin() end)
+		pcall(function() cur_eye = local_player:get_eye_position() end)
+		pcall(function() cur_vel = local_player.m_vecVelocity end)
+		
+		if not cur_origin or not cur_eye or not cur_vel then return nil end
+		if not validate_vec3(cur_origin) or not validate_vec3(cur_eye) or not validate_vec3(cur_vel) then return nil end
+		
+		-- Get acceleration estimate
+		local accel = lp_estimate_acceleration() or { x = 0, y = 0, z = 0 }
+		
+		local tickinterval = globals.tickinterval
+		if not tickinterval or tickinterval <= 0 or not is_finite(tickinterval) then tickinterval = 0.015625 end
+		local gravity = cvar.sv_gravity:float()
+		if not is_finite(gravity) or gravity <= 0 then gravity = 800.0 end
+		
+		-- Eye offset from origin (usually ~64 units up when standing, ~46 when crouching)
+		local eye_offset = vector(0, 0, cur_eye.z - cur_origin.z)
+		
+		local pos = vector(cur_origin.x, cur_origin.y, cur_origin.z)
+		local vel = vector(cur_vel.x, cur_vel.y, cur_vel.z)
+		
+		for _ = 1, ticks do
+			local dt = tickinterval
+			local vertical_accel = (is_grounded and 0 or -gravity) + (accel.z or 0)
+			pos = vector(
+				pos.x + vel.x * dt + 0.5 * (accel.x or 0) * dt * dt,
+				pos.y + vel.y * dt + 0.5 * (accel.y or 0) * dt * dt,
+				pos.z + vel.z * dt + 0.5 * vertical_accel * dt * dt
+			)
+			if not is_finite(pos.x) or not is_finite(pos.y) or not is_finite(pos.z) then
+				return nil
+			end
+			vel.x = vel.x + (accel.x or 0) * dt
+			vel.y = vel.y + (accel.y or 0) * dt
+			vel.z = vel.z + vertical_accel * dt
+		end
+		
+		local predicted_eye = vector(pos.x + eye_offset.x, pos.y + eye_offset.y, pos.z + eye_offset.z)
+		
+		return { origin = pos, eye_pos = predicted_eye, velocity = vel }
+	end
+
+	-- Local player prediction uncertainty
+	local function lp_compute_prediction_uncertainty(pred_ticks, tick_interval)
+		local samples = lp_vel_samples
+		local vel_var = 0.0
+		local trend = nil
+		local stability = 0.0
+		
+		if samples and #samples >= 2 then
+			stability, trend = lp_velocity_stability_and_trend()
+			stability = math.max(0.1, stability)
+			
+			if trend then
+				local var_sum = 0
+				local t0 = samples[1].time
+				for _, s in ipairs(samples) do
+					local dt = s.time - t0
+					local pred_vx = trend.v0.x + trend.a.x * dt
+					local pred_vy = trend.v0.y + trend.a.y * dt
+					local pred_vz = trend.v0.z + trend.a.z * dt
+					local dx = s.x - pred_vx
+					local dy = s.y - pred_vy
+					local dz = s.z - pred_vz
+					var_sum = var_sum + dx*dx + dy*dy + dz*dz
+				end
+				vel_var = var_sum / #samples
+			else
+				local mean_x, mean_y, mean_z = 0, 0, 0
+				for _, s in ipairs(samples) do
+					mean_x = mean_x + s.x
+					mean_y = mean_y + s.y
+					mean_z = mean_z + s.z
+				end
+				mean_x = mean_x / #samples
+				mean_y = mean_y / #samples
+				mean_z = mean_z / #samples
+				local var_sum = 0
+				for _, s in ipairs(samples) do
+					local dx = s.x - mean_x
+					local dy = s.y - mean_y
+					local dz = s.z - mean_z
+					var_sum = var_sum + dx*dx + dy*dy + dz*dz
+				end
+				vel_var = var_sum / #samples
+				if #samples < 6 then
+					vel_var = vel_var * (6.0 / #samples)
+				end
+			end
+		else
+			vel_var = 5000.0
+			stability = 0.1
+		end
+		
+		local accel_info = lp_estimate_acceleration()
+		local accel_var = 0.0
+		if accel_info and accel_info.accel_var then
+			accel_var = accel_info.accel_var
+			accel_var = accel_var * (1.0 + (1.0 - stability) * 10.0)
+		else
+			accel_var = 50000.0
+		end
+		
+		if not is_finite(tick_interval) or tick_interval <= 0 then tick_interval = 0.015625 end
+		local t = pred_ticks * tick_interval
+		if not is_finite(t) then t = pred_ticks * 0.015625 end
+		local t2 = t * t
+		local t4 = t2 * t2
+		
+		local pos_var = 4.0
+		local variance = pos_var + t2 * vel_var + 0.25 * t4 * accel_var
+		variance = variance / stability
+		
+		if not is_finite(variance) or variance > 25000 then variance = 25000 end
+		if variance < 0 then variance = 0 end
+		
+		return math.sqrt(variance)
 	end
 
 	-- Estimate acceleration from velocity history using linear regression over last N samples
@@ -21258,40 +21519,98 @@ do
 		return stability, nil
 	end
 
-	local function bs_extrapolate(origin, velocity, acceleration, ticks, is_grounded)
+	-- Relative extrapolation: predicts enemy position relative to local player's predicted eye position
+	-- Returns { rel_pos = vector (enemy_pos - lp_eye_pos), enemy_pos = vector, lp_eye_pos = vector, lp_origin = vector } or nil
+	local function bs_extrapolate_relative(enemy_origin, enemy_velocity, enemy_acceleration, pred_ticks, enemy_grounded, local_player)
 		-- Validate inputs
+		if not enemy_origin or not enemy_velocity then return nil end
+		if not is_finite(enemy_origin.x) or not is_finite(enemy_origin.y) or not is_finite(enemy_origin.z) then return nil end
+		if not is_finite(enemy_velocity.x) or not is_finite(enemy_velocity.y) or not is_finite(enemy_velocity.z) then return nil end
+		if not local_player then return nil end
+		
+		local tickinterval = globals.tickinterval
+		if not tickinterval or tickinterval <= 0 or not is_finite(tickinterval) then tickinterval = 0.015625 end
+		local gravity = cvar.sv_gravity:float()
+		if not is_finite(gravity) or gravity <= 0 then gravity = 800.0 end
+		
+		-- Get local player current state for grounded check
+		local lp_is_grounded = false
+		pcall(function() lp_is_grounded = bit.band(local_player.m_fFlags or 0, 1) == 1 end)
+		
+		-- Predict enemy position
+		local enemy_pos = vector(enemy_origin.x, enemy_origin.y, enemy_origin.z)
+		local enemy_vel = vector(enemy_velocity.x, enemy_velocity.y, enemy_velocity.z)
+		local enemy_accel = enemy_acceleration or { x = 0, y = 0, z = 0 }
+		
+		-- Predict local player position (origin and eye) for the full horizon
+		local lp_pred = lp_predict(pred_ticks, lp_is_grounded, local_player)
+		if not lp_pred then return nil end
+		
+		-- NOTE: utils.trace_line with mask 2 performs a line trace, NOT a hull trace.
+		-- It does not account for player collision hull size. This is a conservative
+		-- approximation; actual player movement may collide earlier.
+		
+		for _ = 1, pred_ticks do
+			local dt = tickinterval
+			
+			-- Enemy physics
+			local enemy_vertical_accel = (enemy_grounded and 0 or -gravity) + (enemy_accel.z or 0)
+			local enemy_prev = vector(enemy_pos.x, enemy_pos.y, enemy_pos.z)
+			enemy_pos = vector(
+				enemy_pos.x + enemy_vel.x * dt + 0.5 * (enemy_accel.x or 0) * dt * dt,
+				enemy_pos.y + enemy_vel.y * dt + 0.5 * (enemy_accel.y or 0) * dt * dt,
+				enemy_pos.z + enemy_vel.z * dt + 0.5 * enemy_vertical_accel * dt * dt
+			)
+			if not is_finite(enemy_pos.x) or not is_finite(enemy_pos.y) or not is_finite(enemy_pos.z) then
+				return nil
+			end
+			enemy_vel.x = enemy_vel.x + (enemy_accel.x or 0) * dt
+			enemy_vel.y = enemy_vel.y + (enemy_accel.y or 0) * dt
+			enemy_vel.z = enemy_vel.z + enemy_vertical_accel * dt
+			
+			-- Collision check for enemy
+			if utils.trace_line(enemy_prev, enemy_pos, nil, 2).fraction <= 0.99 then
+				return nil
+			end
+		end
+		
+		-- Relative position from local player's predicted eye position to enemy's predicted position
+		local rel_pos = vector(
+			enemy_pos.x - lp_pred.eye_pos.x,
+			enemy_pos.y - lp_pred.eye_pos.y,
+			enemy_pos.z - lp_pred.eye_pos.z
+		)
+		
+		return { rel_pos = rel_pos, enemy_pos = enemy_pos, lp_eye_pos = lp_pred.eye_pos, lp_origin = lp_pred.origin }
+	end
+
+	-- Backwards compatibility: original bs_extrapolate for any existing callers
+	local function bs_extrapolate(origin, velocity, acceleration, ticks, is_grounded)
 		if not origin or not velocity then return origin end
 		if not is_finite(origin.x) or not is_finite(origin.y) or not is_finite(origin.z) then return origin end
 		if not is_finite(velocity.x) or not is_finite(velocity.y) or not is_finite(velocity.z) then return origin end
 		
 		local tickinterval = globals.tickinterval
 		if not tickinterval or tickinterval <= 0 or not is_finite(tickinterval) then tickinterval = 0.015625 end
-		local gravity = cvar.sv_gravity:float() -- units/s², NOT multiplied by tickinterval
+		local gravity = cvar.sv_gravity:float()
 		if not is_finite(gravity) or gravity <= 0 then gravity = 800.0 end
 		
 		local pos = vector(origin.x, origin.y, origin.z)
 		local vel = vector(velocity.x, velocity.y, velocity.z)
 		local accel = acceleration or { x = 0, y = 0, z = 0 }
 		
-		-- NOTE: utils.trace_line with mask 2 performs a line trace, NOT a hull trace.
-		-- It does not account for player collision hull size. This is a conservative
-		-- approximation; actual player movement may collide earlier.
-		
 		for _ = 1, ticks do
 			local prev = pos
 			local dt = tickinterval
-			-- Constant acceleration per tick: pos += vel*dt + 0.5*accel*dt²
 			local vertical_accel = (is_grounded and 0 or -gravity) + (accel.z or 0)
 			pos = vector(
 				pos.x + vel.x * dt + 0.5 * (accel.x or 0) * dt * dt,
 				pos.y + vel.y * dt + 0.5 * (accel.y or 0) * dt * dt,
 				pos.z + vel.z * dt + 0.5 * vertical_accel * dt * dt
 			)
-			-- Validate predicted position
 			if not is_finite(pos.x) or not is_finite(pos.y) or not is_finite(pos.z) then
 				return prev
 			end
-			-- Update velocity for next tick: vel += accel*dt
 			vel.x = vel.x + (accel.x or 0) * dt
 			vel.y = vel.y + (accel.y or 0) * dt
 			vel.z = vel.z + vertical_accel * dt
@@ -21303,11 +21622,12 @@ do
 		return pos
 	end
 
-	local function compute_prediction_uncertainty(rec, pred_ticks, tick_interval)
+	local function compute_prediction_uncertainty(rec, pred_ticks, tick_interval, local_player)
 		-- Variance model: position_variance + t^2 * velocity_variance + 0.25 * t^4 * acceleration_variance
 		-- Base position uncertainty (hitbox/sub-tick interpolation)
 		local pos_var = 4.0 -- ~2 unit radius squared
 		
+		-- Enemy uncertainty
 		local samples = rec.vel_samples
 		local vel_var = 0.0
 		local trend = nil
@@ -21315,11 +21635,9 @@ do
 		
 		if samples and #samples >= 2 then
 			stability, trend = velocity_stability_and_trend(rec)
-			stability = math.max(0.1, stability) -- minimum stability floor
+			stability = math.max(0.1, stability)
 			
-			-- Velocity variance from RESIDUALS around estimated trend, not raw mean
 			if trend then
-				-- Use trend residuals
 				local var_sum = 0
 				local t0 = samples[1].time
 				for _, s in ipairs(samples) do
@@ -21334,7 +21652,6 @@ do
 				end
 				vel_var = var_sum / #samples
 			else
-				-- Fallback: raw variance around mean (but inflated for insufficient samples)
 				local mean_x, mean_y, mean_z = 0, 0, 0
 				for _, s in ipairs(samples) do
 					mean_x = mean_x + s.x
@@ -21352,26 +21669,27 @@ do
 					var_sum = var_sum + dx*dx + dy*dy + dz*dz
 				end
 				vel_var = var_sum / #samples
-				-- Inflate for insufficient samples
 				if #samples < 6 then
 					vel_var = vel_var * (6.0 / #samples)
 				end
 			end
 		else
-			vel_var = 5000.0 -- HIGH variance when no history
+			vel_var = 5000.0
 			stability = 0.1
 		end
 		
-		-- Acceleration variance from estimate_acceleration (which returns estimation uncertainty)
 		local accel_info = estimate_acceleration(rec)
 		local accel_var = 0.0
 		if accel_info and accel_info.accel_var then
 			accel_var = accel_info.accel_var
-			-- Inflate by stability (unstable direction = less confident in acceleration estimate)
 			accel_var = accel_var * (1.0 + (1.0 - stability) * 10.0)
 		else
-			accel_var = 50000.0 -- VERY high when unestimated
+			accel_var = 50000.0
 		end
+		
+		-- Local player uncertainty
+		local lp_uncertainty = lp_compute_prediction_uncertainty(pred_ticks, tick_interval)
+		local lp_var = lp_uncertainty * lp_uncertainty
 		
 		-- Time factors
 		if not is_finite(tick_interval) or tick_interval <= 0 then tick_interval = 0.015625 end
@@ -21380,14 +21698,14 @@ do
 		local t2 = t * t
 		local t4 = t2 * t2
 		
-		local variance = pos_var + t2 * vel_var + 0.25 * t4 * accel_var
-		variance = variance / stability -- unstable movement increases variance
+		-- Combined variance: enemy + local player (independent uncertainties add)
+		local variance = pos_var + t2 * vel_var + 0.25 * t4 * accel_var + lp_var
+		variance = variance / stability
 		
-		-- Clamp
 		if not is_finite(variance) or variance > 25000 then variance = 25000 end
 		if variance < 0 then variance = 0 end
 		
-		return math.sqrt(variance) -- standard deviation in units
+		return math.sqrt(variance)
 	end
 	local S = {
 		enemies = {},            -- [idx] = { ent, name, hp, armor, alive, dormant, def, detected_until, samples, last_seen }
@@ -21533,7 +21851,7 @@ do
 	local function resolve_state(rec, local_player, threat, wc)
 		local lp_pos = nil
 		pcall(function() lp_pos = local_player:get_origin() end)
-		local scoped_weapon = (wc == "awp" or wc == "scout" or wc == "auto")
+		local scoped_weapon = (wc == "awp" or wc == "scout" or wc == "auto_sniper")
 		local state = nil
 		local function eligible(st)
 			local en = bs_v718.hc_cond_state_en and bs_v718.hc_cond_state_en[st]
@@ -21572,7 +21890,7 @@ do
 				local cooldown = 1.0
 				if wc == "awp" then cooldown = 1.95
 				elseif wc == "scout" then cooldown = 1.75
-				elseif wc == "auto" then cooldown = 0.75 end
+				elseif wc == "auto_sniper" then cooldown = 0.75 end
 				if (now - (S.last_shot_time or 0)) > cooldown then
 					local ep = nil
 					pcall(function() ep = threat:get_origin() end)
@@ -21584,9 +21902,9 @@ do
 					end
 				end
 			end
-			local limit = 255
-			if wc == "auto" then limit = 765 end
- if not scoped and not auto_scope and dist and dist <= limit and dist > 0 and eligible("noscope") then state = "noscope" end
+local limit = 255
+			if wc == "auto_sniper" then limit = 765 end
+  if not scoped and not auto_scope and dist and dist <= limit and dist > 0 and eligible("noscope") then state = "noscope" end
 	end
 
 	-- LC/Defensive (priority 2) - max 1800u
@@ -21707,7 +22025,7 @@ local function decide_for_threat(rec, local_player, threat)
 		local matched_state = nil  -- Store original matched condition for extrapolation config
 		local wc = bs_select_weapon_class()
 		if bs_v718.hc_conditions and bs_v718.hc_conditions:get() and threat then
-			local hc_weapon = (wc == "awp" or wc == "scout" or wc == "auto")
+			local hc_weapon = (wc == "awp" or wc == "scout" or wc == "auto_sniper")
 			if hc_weapon then
 				state = resolve_state(rec, local_player, threat, wc)
 				matched_state = state  -- Remember which condition actually matched
@@ -21727,30 +22045,34 @@ local function decide_for_threat(rec, local_player, threat)
 					end
 				end
 
-				-- Defensive/LC hitchance override: when the ENEMY is in defensive state,
-				-- apply LC/Defensive condition HC (rec.def tracks enemy defensive state)
-				if rec and rec.def and bs_v718.hc_conditions and bs_v718.hc_conditions:get() then
-					local lc_en = bs_v718.hc_cond_state_en and bs_v718.hc_cond_state_en["lc"]
-					local lc_sl = bs_v718.hc_cond_state_sl and bs_v718.hc_cond_state_sl["lc"]
-					local lc_enabled = false
-					pcall(function() lc_enabled = lc_en and lc_en:get() end)
-					if lc_enabled and lc_sl then
-						local wsl = lc_sl[wc]
-						local wpen = bs_v718.hc_cond_state_wpn and bs_v718.hc_cond_state_wpn["lc"] and bs_v718.hc_cond_state_wpn["lc"][wc]
-						local wpen_on = true
-						if wpen then pcall(function() wpen_on = wpen:get() end) end
-						if wpen_on then
-							local def_hc = wsl and wsl:get() or 0
-							pcall(function() cond_hc = math.max(cond_hc or 0, def_hc) end)
+			-- Defensive/LC hitchance override: when the ENEMY is in defensive state,
+			-- apply LC/Defensive condition HC (rec.def tracks enemy defensive state)
+			local lc_override_applied = false
+			if rec and rec.def and bs_v718.hc_conditions and bs_v718.hc_conditions:get() then
+				local lc_en = bs_v718.hc_cond_state_en and bs_v718.hc_cond_state_en["lc"]
+				local lc_sl = bs_v718.hc_cond_state_sl and bs_v718.hc_cond_state_sl["lc"]
+				local lc_enabled = false
+				pcall(function() lc_enabled = lc_en and lc_en:get() end)
+				if lc_enabled and lc_sl then
+					local wsl = lc_sl[wc]
+					local wpen = bs_v718.hc_cond_state_wpn and bs_v718.hc_cond_state_wpn["lc"] and bs_v718.hc_cond_state_wpn["lc"][wc]
+					local wpen_on = true
+					if wpen then pcall(function() wpen_on = wpen:get() end) end
+					if wpen_on then
+						local def_hc = wsl and wsl:get() or 0
+						if def_hc > (cond_hc or 0) then
+							cond_hc = def_hc
+							lc_override_applied = true
 						end
 					end
-					-- NOTE: do NOT change 'state' or 'matched_state' here; extrapolation must use original matched condition's config
 				end
+				-- NOTE: do NOT change 'state' or 'matched_state' here; extrapolation must use original matched condition's config
+			end
 
-				-- Extrapolation per condition per weapon: if the matched condition has extrapolation enabled for this weapon, run prediction
-				local bs_hc_before_ext = cond_hc or 0
-				local extrapolation_applied = false
-				if matched_state and cond_hc > 0 and threat then
+			-- Extrapolation per condition per weapon: if the matched condition has extrapolation enabled for this weapon, run prediction
+			local bs_hc_before_ext = cond_hc or 0
+			local extrapolation_applied = false
+			if matched_state and cond_hc > 0 and threat then
 					local ext_en = bs_v718.hc_cond_state_ext_en and bs_v718.hc_cond_state_ext_en[matched_state] and bs_v718.hc_cond_state_ext_en[matched_state][wc]
 					local ext_on = false
 					if ext_en then pcall(function() ext_on = ext_en:get() end) end
@@ -21770,45 +22092,47 @@ local function decide_for_threat(rec, local_player, threat)
 								-- Validate inputs using helper
 								if is_finite(evel.x) and is_finite(evel.y) and is_finite(evel.z) and
 								   is_finite(ep.x) and is_finite(ep.y) and is_finite(ep.z) then
-									-- Estimate acceleration from history
-									local accel = estimate_acceleration(rec)
-									local pred_pos = bs_extrapolate(ep, evel, accel, pred_ticks, is_grounded)
-									-- Validate predicted position
-									if pred_pos and is_finite(pred_pos.x) and is_finite(pred_pos.y) and is_finite(pred_pos.z) then
-										local dx = pred_pos.x - ep.x
-										local dy = pred_pos.y - ep.y
-										local pred_dist_2d = math.sqrt(dx * dx + dy * dy)
-										-- Compute prediction uncertainty (confidence)
+									-- Teleport detection: check if enemy moved impossibly far since last update
+									local teleport_detected = false
+									if rec.last_origin and rec.last_simtime then
+										local dx = ep.x - rec.last_origin.x
+										local dy = ep.y - rec.last_origin.y
+										local dz = ep.z - rec.last_origin.z
+										local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+										local dt = (threat.m_flSimulationTime or 0) - rec.last_simtime
+										if dt > 0 and is_finite(dt) then
+											local speed = dist / dt
+											if speed > 3000 then -- units/s, well above max movement speed
+												teleport_detected = true
+											end
+										end
+									end
+									rec.last_origin = { x = ep.x, y = ep.y, z = ep.z }
+									rec.last_simtime = threat.m_flSimulationTime or 0
+									
+									if not teleport_detected then
+										-- Estimate acceleration from history
+										local accel = estimate_acceleration(rec)
+									-- Relative extrapolation: enemy position relative to predicted local player eye position
+									local rel_pred = bs_extrapolate_relative(ep, evel, accel, pred_ticks, is_grounded, local_player)
+									if rel_pred and is_finite(rel_pred.rel_pos.x) and is_finite(rel_pred.rel_pos.y) and is_finite(rel_pred.rel_pos.z) then
+										local pred_dist_2d = math.sqrt(rel_pred.rel_pos.x * rel_pred.rel_pos.x + rel_pred.rel_pos.y * rel_pred.rel_pos.y)
+										-- Compute prediction uncertainty (confidence) - includes BOTH enemy and local player uncertainty
 										local tick_interval = globals.tickinterval or 0.015625
-										local uncertainty = compute_prediction_uncertainty(rec, pred_ticks, tick_interval)
-										-- Validate uncertainty
+										local uncertainty = compute_prediction_uncertainty(rec, pred_ticks, tick_interval, local_player)
 										if is_finite(uncertainty) and uncertainty >= 0 then
-											-- Effective hitbox margin: how much position error we can tolerate
-											-- Based on weapon and condition - conservative baseline
-											local hitbox_margin = 12.0 -- ~head hitbox radius in units
-											-- Uncertainty ratio: 0 = perfect prediction, 1 = uncertainty equals margin, >1 = unreliable
+											local hitbox_margin = 15.0
 											local uncertainty_ratio = uncertainty / hitbox_margin
-											-- Confidence factor: 1.0 = full confidence, approaches 0 as uncertainty grows
 											local confidence = 1.0 / (1.0 + uncertainty_ratio * uncertainty_ratio)
-											-- Predicted displacement per tick
 											local pred_disp_per_tick = pred_dist_2d / pred_ticks
-											-- Base penalty from predicted movement difficulty
-											local k_movement = 0.00693 -- ln(2)/100, 100u/tick = 50% HC
+											local k_movement = 0.005
 											local movement_penalty = math.exp(-k_movement * pred_disp_per_tick)
-											-- Confidence-adjusted penalty: when confidence is low, reduce the penalty
-											-- (we don't trust the prediction enough to heavily penalize)
-											-- When confidence=1: full penalty. When confidence=0.5: half penalty.
 											local effective_penalty = 1.0 - confidence * (1.0 - movement_penalty)
 											cond_hc = math.floor(cond_hc * effective_penalty + 0.5)
-											-- Minimum clamp BEFORE weapon-specific adjustments
-											if cond_hc < 5 then cond_hc = 5 end
-											-- Halve HC for auto snipers (after min clamp)
-											if wc == "auto" then
-												cond_hc = math.floor(cond_hc * 0.5 + 0.5)
-												if cond_hc < 5 then cond_hc = 5 end
-											end
+											if cond_hc < 3 then cond_hc = 3 end
+											-- Extrapolated HC floor: never below 40 when extrapolation applied
+											if hc_weapon and cond_hc < 40 then cond_hc = 40 end
 											extrapolation_applied = true
-											-- Store detailed reporting info
 											bs_hc_extrapolated_target = enemy_name(threat)
 											bs_hc_extrapolated_hc = cond_hc
 											bs_hc_extrapolation_confidence = confidence
@@ -21817,6 +22141,7 @@ local function decide_for_threat(rec, local_player, threat)
 											bs_hc_extrapolation_pred_dist = pred_dist_2d
 											bs_hc_extrapolation_accel = accel
 										end
+									end
 									end
 								end
 							end
@@ -21835,6 +22160,74 @@ local function decide_for_threat(rec, local_player, threat)
 				end
 			end
 		end
+
+	-- LC/Defensive extrapolation: if LC override applied and LC has extrapolation enabled, run it
+	if lc_override_applied and cond_hc > 0 and threat then
+		local ext_en = bs_v718.hc_cond_state_ext_en and bs_v718.hc_cond_state_ext_en["lc"] and bs_v718.hc_cond_state_ext_en["lc"][wc]
+		local ext_on = false
+		if ext_en then pcall(function() ext_on = ext_en:get() end) end
+		if ext_on then
+			local pred_ticks = 3
+			local ticks_sl = bs_v718.hc_cond_state_ext_ticks and bs_v718.hc_cond_state_ext_ticks["lc"] and bs_v718.hc_cond_state_ext_ticks["lc"][wc]
+			if ticks_sl then pcall(function() pred_ticks = ticks_sl:get() or 3 end) end
+			if pred_ticks > 0 then
+				local ep = nil
+				local evel = nil
+				pcall(function() ep = threat:get_origin() end)
+				pcall(function() evel = threat.m_vecVelocity end)
+				local is_grounded = false
+				pcall(function() is_grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
+				if ep and evel and evel.x and evel.y and evel.z then
+					if is_finite(evel.x) and is_finite(evel.y) and is_finite(evel.z) and
+					   is_finite(ep.x) and is_finite(ep.y) and is_finite(ep.z) then
+						local teleport_detected = false
+						if rec.last_origin and rec.last_simtime then
+							local dx = ep.x - rec.last_origin.x
+							local dy = ep.y - rec.last_origin.y
+							local dz = ep.z - rec.last_origin.z
+							local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+							local dt = (threat.m_flSimulationTime or 0) - rec.last_simtime
+							if dt > 0 and is_finite(dt) then
+								local speed = dist / dt
+								if speed > 3000 then teleport_detected = true end
+							end
+						end
+						rec.last_origin = { x = ep.x, y = ep.y, z = ep.z }
+						rec.last_simtime = threat.m_flSimulationTime or 0
+						if not teleport_detected then
+							local accel = estimate_acceleration(rec)
+							local rel_pred = bs_extrapolate_relative(ep, evel, accel, pred_ticks, is_grounded, local_player)
+							if rel_pred and is_finite(rel_pred.rel_pos.x) and is_finite(rel_pred.rel_pos.y) and is_finite(rel_pred.rel_pos.z) then
+								local pred_dist_2d = math.sqrt(rel_pred.rel_pos.x * rel_pred.rel_pos.x + rel_pred.rel_pos.y * rel_pred.rel_pos.y)
+								local tick_interval = globals.tickinterval or 0.015625
+								local uncertainty = compute_prediction_uncertainty(rec, pred_ticks, tick_interval, local_player)
+								if is_finite(uncertainty) and uncertainty >= 0 then
+									local hitbox_margin = 15.0
+									local uncertainty_ratio = uncertainty / hitbox_margin
+									local confidence = 1.0 / (1.0 + uncertainty_ratio * uncertainty_ratio)
+									local pred_disp_per_tick = pred_dist_2d / pred_ticks
+									local k_movement = 0.005
+									local movement_penalty = math.exp(-k_movement * pred_disp_per_tick)
+									local effective_penalty = 1.0 - confidence * (1.0 - movement_penalty)
+									cond_hc = math.floor(cond_hc * effective_penalty + 0.5)
+									if cond_hc < 3 then cond_hc = 3 end
+									if hc_weapon and cond_hc < 40 then cond_hc = 40 end
+									extrapolation_applied = true
+									bs_hc_extrapolated_target = enemy_name(threat)
+									bs_hc_extrapolated_hc = cond_hc
+									bs_hc_extrapolation_confidence = confidence
+									bs_hc_extrapolation_uncertainty = uncertainty
+									bs_hc_extrapolation_pred_ticks = pred_ticks
+									bs_hc_extrapolation_pred_dist = pred_dist_2d
+									bs_hc_extrapolation_accel = accel
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
 
 	bs_active_hc_state = state
 	return (cond_hc and cond_hc > 0) and cond_hc or 0
@@ -21914,6 +22307,7 @@ local function decide_for_threat(rec, local_player, threat)
 local function reset()
 		S.enemies = {}
 		S.stand_dwell = {}
+		lp_vel_samples = {}
 		release_overrides()
 		bs_active_hc_value = 0
 		bs_active_hc_state = nil
@@ -21924,7 +22318,10 @@ local function reset()
 		bs_hc_extrapolation_pred_ticks = nil
 		bs_hc_extrapolation_pred_dist = nil
 		bs_hc_extrapolation_accel = nil
-	end
+end
+
+	-- HC system round start reset
+	events.round_start(reset)
 
 	events.createmove(function(cmd)
 		local attack_held = cmd and cmd.buttons and bit.band(cmd.buttons, 1) ~= 0
@@ -21946,7 +22343,19 @@ local function reset()
 			return
 		end
 
-		update_enemies(globals.curtime or 0)
+		-- Record local player velocity for relative prediction
+		local now = globals.curtime or 0
+		local lp_vel = nil
+		local lp_origin = nil
+		local lp_simtime = nil
+		pcall(function() lp_vel = local_player.m_vecVelocity end)
+		pcall(function() lp_origin = local_player:get_origin() end)
+		pcall(function() lp_simtime = local_player.m_flSimulationTime end)
+		if lp_vel and lp_vel.x and lp_vel.y and lp_vel.z and lp_origin and lp_simtime then
+			lp_add_vel_sample(lp_vel, now, lp_origin, lp_simtime)
+		end
+
+		update_enemies(now)
 
 		local threat = nil
 		local ok, t = pcall(entity.get_threat)
@@ -21972,7 +22381,7 @@ end
 local autoscope_should_enable = false
 if threat and threat:is_alive() then
 	local wc = bs_select_weapon_class()
-	if wc == "awp" or wc == "scout" or wc == "auto" then
+	if wc == "awp" or wc == "scout" or wc == "auto_sniper" then
 		local dormant = false
 		pcall(function() dormant = threat:is_dormant() end)
 		if not dormant then
@@ -21988,7 +22397,7 @@ if threat and threat:is_alive() then
 				dist = math.sqrt(dx*dx + dy*dy + dz*dz)
 			end
 			local limit = 255
-			if wc == "auto" then limit = 765 end
+			if wc == "auto_sniper" then limit = 765 end
 			if dist and dist > limit then
 				autoscope_should_enable = true
 			end

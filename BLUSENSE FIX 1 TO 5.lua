@@ -21132,20 +21132,15 @@ do
 	local function estimate_acceleration(rec)
 		local samples = rec.vel_samples
 		if not samples or #samples < 3 then return nil end
-		-- Use last 3 samples for robust estimate
+		-- Use first and last of last 3 samples for average acceleration over the period
 		local n = #samples
-		local s1, s2, s3 = samples[n-2], samples[n-1], samples[n]
-		local dt1 = s2.time - s1.time
-		local dt2 = s3.time - s2.time
-		if dt1 <= 0 or dt2 <= 0 then return nil end
-		-- Acceleration = (v3 - v2)/dt2 - (v2 - v1)/dt1 averaged
-		local ax1 = (s2.x - s1.x) / dt1
-		local ay1 = (s2.y - s1.y) / dt1
-		local ax2 = (s3.x - s2.x) / dt2
-		local ay2 = (s3.y - s2.y) / dt2
+		local s1, s3 = samples[n-2], samples[n]
+		local dt = s3.time - s1.time
+		if dt <= 0 then return nil end
+		-- Average acceleration = (v3 - v1) / dt
+		local accel_x = (s3.x - s1.x) / dt
+		local accel_y = (s3.y - s1.y) / dt
 		-- Check for extreme acceleration (filter noise/teleports)
-		local accel_x = (ax2 - ax1) * 0.5
-		local accel_y = (ay2 - ay1) * 0.5
 		local accel_mag = math.sqrt(accel_x * accel_x + accel_y * accel_y)
 		if accel_mag > 10000 then return nil end -- unrealistic, likely noise/teleport
 		return { x = accel_x, y = accel_y }
@@ -21176,31 +21171,22 @@ do
 		local tickinterval = globals.tickinterval
 		if not tickinterval or tickinterval <= 0 then tickinterval = 0.015625 end
 		local gravity = cvar.sv_gravity:float() * tickinterval
-		local time = ticks * tickinterval
 		local pos = vector(origin.x, origin.y, origin.z)
 		local vel = vector(velocity.x, velocity.y, velocity.z)
 		local accel = acceleration or { x = 0, y = 0, z = 0 }
-		-- Horizontal: constant acceleration model
-		-- pos = pos0 + v*t + 0.5*a*t^2
-		-- Vertical: gravity when airborne
-		local next_z = pos.z + vel.z * time
-		if not is_grounded then
-			next_z = next_z - 0.5 * gravity * time * time
-		end
-		-- We still step per tick for collision detection
 		for _ = 1, ticks do
 			local prev = pos
-			-- Velocity integration with acceleration
-			vel.x = vel.x + accel.x * tickinterval
-			vel.y = vel.y + accel.y * tickinterval
-			if not is_grounded then
-				vel.z = vel.z - gravity
-			end
+			-- Constant acceleration per tick: pos += vel*dt + 0.5*accel*dt², then vel += accel*dt
+			local dt = tickinterval
 			pos = vector(
-				pos.x + vel.x * tickinterval,
-				pos.y + vel.y * tickinterval,
-				pos.z + vel.z * tickinterval
+				pos.x + vel.x * dt + 0.5 * accel.x * dt * dt,
+				pos.y + vel.y * dt + 0.5 * accel.y * dt * dt,
+				pos.z + vel.z * dt + 0.5 * (accel.z + (is_grounded and 0 or -gravity)) * dt * dt
 			)
+			-- Update velocity for next tick
+			vel.x = vel.x + accel.x * dt
+			vel.y = vel.y + accel.y * dt
+			vel.z = vel.z + (accel.z + (is_grounded and 0 or -gravity)) * dt
 			if utils.trace_line(prev, pos, nil, 2).fraction <= 0.99 then
 				return prev
 			end
@@ -21231,15 +21217,18 @@ do
 			end
 			vel_var = var_sum / #samples
 		else
-			vel_var = 500.0 -- high variance when no history
+			vel_var = 5000.0 -- HIGH variance when no history (was 500)
 		end
-		-- Acceleration variance
+		-- Acceleration variance: uncertainty in acceleration estimate, not magnitude
 		local accel = estimate_acceleration(rec)
 		local accel_var = 0.0
 		if accel then
-			accel_var = accel.x*accel.x + accel.y*accel.y
+			-- If we have an estimate, use small variance based on sample consistency
+			-- Higher variance = less confident in the acceleration estimate
+			local stability = velocity_stability(rec)
+			accel_var = (accel.x*accel.x + accel.y*accel.y) * (1.0 + (1.0 - stability) * 10.0)
 		else
-			accel_var = 10000.0 -- high when unestimated
+			accel_var = 50000.0 -- VERY high when unestimated (was 10000)
 		end
 		local t = pred_ticks * tick_interval
 		local t2 = t * t
@@ -21249,7 +21238,7 @@ do
 		local stability = velocity_stability(rec)
 		variance = variance / math.max(0.1, stability) -- unstable movement increases variance
 		-- Clamp
-		if variance > 10000 then variance = 10000 end
+		if variance > 25000 then variance = 25000 end
 		return math.sqrt(variance) -- standard deviation in units
 	end
 	local S = {
@@ -21363,7 +21352,7 @@ do
 		rec.def = defensive or (rec.detected_until or 0) > now
 		-- Record velocity sample for extrapolation
 		local vel = nil
-		pcall(function() vel = threat.m_vecVelocity end)
+		pcall(function() vel = p.m_vecVelocity end)
 		if vel and vel.x and vel.y and vel.z then
 			add_vel_sample(rec, vel, now)
 		end

@@ -3943,6 +3943,9 @@ bs_v718.hc_cond_state_en = {}
 bs_v718.hc_cond_state_wlist = {}
 bs_v718.hc_cond_state_wpn = {}
 bs_v718.hc_cond_state_sl = {}
+bs_v718.hc_cond_state_ext_en = {}
+bs_v718.hc_cond_state_ext_ticks = {}
+bs_v718.hc_cond_state_ext_thresh = {}
 local bs_cond_states = { "noscope", "air", "lc", "stand", "below", "above", "enemyhp", "enemymove" }
 local bs_cond_labels = { "No Scope", "In Air", "LC/Defensive", "Standing", "Below", "Above", "Enemy HP", "Enemy Moving" }
 for ci, cstate in ipairs(bs_cond_states) do
@@ -3950,18 +3953,20 @@ for ci, cstate in ipairs(bs_cond_states) do
 	bs_v718.hc_cond_state_wlist[cstate] = bs_v718.hc_cond_gear:list(cstate .. " Weapon", { "awp", "auto", "scout" }):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true })
 	bs_v718.hc_cond_state_wpn[cstate] = {}
 	bs_v718.hc_cond_state_sl[cstate] = {}
+	bs_v718.hc_cond_state_ext_en[cstate] = {}
+	bs_v718.hc_cond_state_ext_ticks[cstate] = {}
 	local widx = 0
-	for _, hw in ipairs({ { key = "awp", label = "AWP" }, { key = "auto", label = "Auto" }, { key = "scout", label = "Scout" } }) do
+	for _, hw in ipairs({ { key = "awp", label = "AWP" }, { key = "auto", label = "Auto" }, { key = "scout", label = "Scout" }, { key = "ak", label = "AK-47" } }) do
 		widx = widx + 1
 		bs_v718.hc_cond_state_wpn[cstate][hw.key] = bs_v718.hc_cond_gear:switch("   " .. hw.label .. " Enable"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true }, { bs_v718.hc_cond_state_wlist[cstate], widx })
 		bs_v718.hc_cond_state_sl[cstate][hw.key] = bs_v718.hc_cond_gear:slider("   " .. hw.label .. " HC", 0, 100, 0, 1, function(v) if v == 0 then return "OFF" end return v .. "%" end):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true }, { bs_v718.hc_cond_state_wlist[cstate], widx }, { bs_v718.hc_cond_state_wpn[cstate][hw.key], true })
+		-- Extrapolation per condition per weapon (silent, no sliders)
+		bs_v718.hc_cond_state_ext_en[cstate][hw.key] = bs_v718.hc_cond_gear:switch("   " .. hw.label .. " Extrapolate"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true }, { bs_v718.hc_cond_state_wlist[cstate], widx }, { bs_v718.hc_cond_state_wpn[cstate][hw.key], true })
+		bs_v718.hc_cond_state_ext_ticks[cstate][hw.key] = bs_v718.hc_cond_gear:slider("   " .. hw.label .. " Ext. Ticks", 0, 10, 3, 1, function(v) if v == 0 then return "OFF" end return v .. "t" end):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true }, { bs_v718.hc_cond_state_wlist[cstate], widx }, { bs_v718.hc_cond_state_wpn[cstate][hw.key], true }, { bs_v718.hc_cond_state_ext_en[cstate][hw.key], true })
 	end
 end
+
 -- Enemy HP threshold slider (global, used by "Enemy HP" condition)
-bs_v718.hc_cond_hp_threshold = {}
-for _, hw in ipairs({ { key = "awp", label = "AWP", widx = 1 }, { key = "auto", label = "Auto", widx = 2 }, { key = "scout", label = "Scout", widx = 3 } }) do
-	bs_v718.hc_cond_hp_threshold[hw.key] = bs_v718.hc_cond_gear:slider("Enemy HP Threshold " .. hw.label, 0, 100, 50, 1):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "Enemy HP" }, { bs_v718.hc_cond_state_en["enemyhp"], true }, { bs_v718.hc_cond_state_wlist["enemyhp"], hw.widx }, { bs_v718.hc_cond_state_wpn["enemyhp"][hw.key], true })
-end
 
 bs_v621.aimbot = bs_v718
 
@@ -3977,6 +3982,7 @@ bs_v742 = bs_v731.anim_breaker:create()
 bs_v731.types = bs_v742:selectable(bs_fmt("type"), {
 	"in air",
 	"on ground",
+	"standing",
 	"pitch zero on land"
 }):depend({ bs_v731.anim_breaker, true })
 bs_v731.in_air_type = bs_v742:combo(bs_fmt("in air"), {
@@ -3988,6 +3994,14 @@ bs_v731.on_ground_type = bs_v742:combo(bs_fmt("on ground"), {
 	"jitter",
 	"reverse running"
 }, "static"):depend({ bs_v731.anim_breaker, true }, { bs_v731.types, "on ground" })
+bs_v731.jitter_speed = bs_v742:slider(bs_fmt("jitter speed"), 1, 22, 3, 1, "t"):depend({ bs_v731.anim_breaker, true }, { bs_v731.types, "on ground" }, { bs_v731.on_ground_type, "jitter" })
+bs_v731.jitter_value = bs_v742:slider(bs_fmt("jitter value"), -1, 1, 0.8, 0.01):depend({ bs_v731.anim_breaker, true }, { bs_v731.types, "on ground" }, { bs_v731.on_ground_type, "jitter" })
+bs_v731.standing_type = bs_v742:combo(bs_fmt("standing"), {
+	"static",
+	"jitter"
+}, "static"):depend({ bs_v731.anim_breaker, true }, { bs_v731.types, "standing" })
+bs_v731.standing_jitter_speed = bs_v742:slider(bs_fmt("jitter speed"), 1, 22, 3, 1, "t"):depend({ bs_v731.anim_breaker, true }, { bs_v731.types, "standing" }, { bs_v731.standing_type, "jitter" })
+bs_v731.standing_jitter_value = bs_v742:slider(bs_fmt("jitter value"), -1, 1, 0.8, 0.01):depend({ bs_v731.anim_breaker, true }, { bs_v731.types, "standing" }, { bs_v731.standing_type, "jitter" })
 
 bs_v621.movement = bs_v731
 
@@ -7113,7 +7127,7 @@ function bs_safe_head.think(arg_224_0)
 	local my_origin = nil
 	pcall(function() my_origin = var_224_0:get_origin() end)
 
-	local var_224_1 = entity.get_threat(true) or entity.get_threat()
+	local var_224_1 = entity.get_threat()
 	local closest_dist = math.huge
 	if var_224_1 and my_origin then
 		pcall(function()
@@ -8302,7 +8316,8 @@ function bs_legit_aa.think(arg_277_0)
 		return false
 	end
 
-	if not arg_277_0.in_use then
+	local in_use = arg_277_0.in_use or (arg_277_0.buttons and bit.band(arg_277_0.buttons, 32) ~= 0)
+	if not in_use then
 		return false
 	end
 
@@ -8426,7 +8441,8 @@ function bs_break_lc.think(arg_291_0)
 		return false
 	end
 
-	if var_291_2.additions_normal and var_291_2.additions_normal:get("ignore grenade") and var_291_1:get_weapon_info().weapon_type == 9 then
+	local var_291_info = var_291_1:get_weapon_info()
+	if var_291_2.additions_normal and var_291_2.additions_normal:get("ignore grenade") and var_291_info and var_291_info.weapon_type == 9 then
 		return false
 	end
 
@@ -8690,6 +8706,11 @@ events.createmove(function()
 		return
 	end
 
+	-- Don't run auto HS logic if legit AA is active (user is holding +use)
+	if bs_legit_aa.is_working then
+		return
+	end
+
 	local var_304_2
 
 	if bs_v571 then
@@ -8782,7 +8803,7 @@ function bs_freestanding.think(arg_308_0)
 end
 
 function bs_freestanding.get_side(arg_309_0)
-	local var_309_0 = entity.get_threat(true) or entity.get_threat()
+	local var_309_0 = entity.get_threat() or entity.get_threat()
 
 	if not var_309_0 then
 		bs_freestanding.side = false
@@ -9132,7 +9153,7 @@ events.render(function()
 		return
 	end
 
-	bs_iter_players(true, true, function(arg_324_0)
+	bs_iter_players(true, false, function(arg_324_0)
 		local var_324_0 = arg_324_0:get_index()
 
 		local function var_324_1(arg_325_0, arg_325_1)
@@ -9476,7 +9497,7 @@ function bs_v355()
 		return nil
 	end
 
-	local var_331_1 = entity.get_threat(true) or entity.get_threat()
+	local var_331_1 = entity.get_threat() or entity.get_threat()
 
 	if not var_331_1 then
 		return nil
@@ -9700,11 +9721,33 @@ function bs_defensive_mgr.update(arg_336_0, arg_336_1, arg_336_2, arg_336_3)
 		return false
 	end
 
+	-- Team-specific defensive settings key (ct_ / t_ prefix)
+	local bs_def_team_prefix = ""
+	local var_336_lp = entity.get_local_player()
+	if var_336_lp and var_336_lp:is_alive() then
+		local var_336_team = var_336_lp.m_iTeamNum
+		if var_336_team == 3 then
+			bs_def_team_prefix = "ct_"
+		elseif var_336_team == 2 then
+			bs_def_team_prefix = "t_"
+		end
+	end
+
 	local var_336_0 = bs_menu.antiaim.defensive
+
+	local function bs_def_get_settings(state_key)
+		local bs_team_key = bs_def_team_prefix .. state_key
+		local bs_team_settings = var_336_0.settings and var_336_0.settings[bs_team_key]
+		if bs_team_settings then
+			return bs_team_settings, bs_team_key
+		end
+		return var_336_0.settings and var_336_0.settings[state_key], state_key
+	end
 
 	local function var_336_1()
 		bs_defensive_mgr.is_active = false
 
+		pcall(function() bs_config.antiaim.angles.hidden:override(false) end)
 		rage.antiaim:override_hidden_pitch(0)
 		rage.antiaim:override_hidden_yaw_offset(0)
 	end
@@ -9756,12 +9799,11 @@ local var_336_13
 			var_336_14 = "game events"
 			var_336_15 = var_336_0.settings[var_336_14]
 		else
-			local var_336_18 = var_336_0.settings[arg_336_2]
-			local var_336_19 = var_336_18 and var_336_18.enable and var_336_18.enable:get() or false
+			var_336_15, var_336_14 = bs_def_get_settings(arg_336_2)
+			local var_336_19 = var_336_15 and var_336_15.enable and var_336_15.enable:get() or false
 
 			if var_336_19 then
-				var_336_14 = arg_336_2
-				var_336_15 = var_336_18
+				var_336_14 = var_336_14
 			elseif arg_336_3 then
 				var_336_14 = "safe head"
 				var_336_15 = var_336_0.settings["safe head"]
@@ -9813,7 +9855,7 @@ if not var_336_15 or not var_336_15.enable:get() then
 		end
 
 	-- Game Events bypasses "hittable only" - driven by external timers, not threat visibility
-	if var_336_14 ~= "game events" and var_336_15.activation_mode:get() == "hittable only" and not bs_safe_head.threat_can_hit_head(entity.get_threat(true) or entity.get_threat()) then
+	if var_336_14 ~= "game events" and var_336_15.activation_mode:get() == "hittable only" and not bs_safe_head.threat_can_hit_head(entity.get_threat() or entity.get_threat()) then
 		var_336_1()
 
 		return false
@@ -9956,7 +9998,29 @@ function bs_v567(arg_342_0, arg_342_1, arg_342_2)
 		var_342_5 = var_342_7 and var_342_7.abf_notify ~= nil and var_342_7.abf_notify:get() or false
 
 		local var_342_8 = bs_menu.antiaim.defensive
-		local var_342_9 = var_342_8 and var_342_8.settings and var_342_8.settings[var_342_2]
+		local var_342_9
+		pcall(function()
+			local var_342_lp = entity.get_local_player()
+			local var_342_team_prefix = ""
+			if var_342_lp and var_342_lp:is_alive() then
+				local var_342_team = var_342_lp.m_iTeamNum
+				if var_342_team == 3 then
+					var_342_team_prefix = "ct_"
+				elseif var_342_team == 2 then
+					var_342_team_prefix = "t_"
+				end
+			end
+			local var_342_team_key = var_342_team_prefix .. var_342_2
+			local var_342_team_settings = var_342_8 and var_342_8.settings and var_342_8.settings[var_342_team_key]
+			if var_342_team_settings then
+				var_342_9 = var_342_team_settings
+			else
+				var_342_9 = var_342_8.settings[var_342_2]
+			end
+		end)
+		if not var_342_9 then
+			var_342_9 = var_342_8.settings[var_342_2]
+		end
 
 		var_342_4 = var_342_9 and var_342_9.def_abf and var_342_9.def_abf:get() or false
 		var_342_6 = var_342_9 and var_342_9.def_abf_notify and var_342_9.def_abf_notify:get() or false
@@ -10573,7 +10637,29 @@ function bs_def_snap.think(arg_362_0)
 		return false
 	end
 
-	local var_362_4 = bs_menu.antiaim.defensive.settings[arg_362_0]
+	local var_362_4
+	pcall(function()
+		local var_362_lp = entity.get_local_player()
+		local var_362_team_prefix = ""
+		if var_362_lp and var_362_lp:is_alive() then
+			local var_362_team = var_362_lp.m_iTeamNum
+			if var_362_team == 3 then
+				var_362_team_prefix = "ct_"
+			elseif var_362_team == 2 then
+				var_362_team_prefix = "t_"
+			end
+		end
+		local var_362_team_key = var_362_team_prefix .. arg_362_0
+		local var_362_team_settings = bs_menu.antiaim.defensive and bs_menu.antiaim.defensive.settings and bs_menu.antiaim.defensive.settings[var_362_team_key]
+		if var_362_team_settings then
+			var_362_4 = var_362_team_settings
+		else
+			var_362_4 = bs_menu.antiaim.defensive.settings[arg_362_0]
+		end
+	end)
+	if not var_362_4 then
+		var_362_4 = bs_menu.antiaim.defensive.settings[arg_362_0]
+	end
 
 	if not var_362_4 or not var_362_4.fe or not var_362_4.fe:get() then
 		return false
@@ -10995,21 +11081,12 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 
 			local var_375_1 = var_374_25(arg_375_0)
 			local var_375_2 = var_374_2 and var_374_2:dist2d(arg_375_0:get_origin()) or math.huge
-			local var_375_3 = var_375_1 * 100000 + var_375_2
+			local var_375_3 = var_375_2 * 100000 + var_375_1
 
 			if var_375_3 < var_374_3 then
 				var_374_3 = var_375_3
 				var_374_4 = arg_375_0
 			end
-		end
-
-		-- Priority: engine crosshair threat, then visible enemies nearest crosshair, then any live enemy nearest crosshair.
-		local var_374_5, var_374_6 = pcall(function()
-			return entity.get_threat(true)
-		end)
-
-		if var_374_5 and var_374_6 and var_374_19(var_374_6) then
-			var_374_4 = var_374_6
 		end
 
 		if not var_374_4 then
@@ -11026,6 +11103,16 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 
 				var_374_20(arg_375_0)
 			end)
+		end
+
+		if not var_374_4 then
+			local var_374_5, var_374_6 = pcall(function()
+				return entity.get_threat()
+			end)
+
+			if var_374_5 and var_374_6 and var_374_19(var_374_6) then
+				var_374_4 = var_374_6
+			end
 		end
 
 		if not var_374_4 then
@@ -11321,11 +11408,7 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 		elseif var_376_4 == "random" then
 			if arg_376_0.choked_commands == 0 then
-				if bs_v274_toggle[arg_376_3] == nil then bs_v274_toggle[arg_376_3] = false end
-				bs_v274_toggle[arg_376_3] = not bs_v274_toggle[arg_376_3]
-				if bs_v274_toggle[arg_376_3] then
-					bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
-				end
+				bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
 			end
 
 			if (bs_v274[arg_376_3] or 0) <= 0 then
@@ -11434,11 +11517,7 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 		elseif var_376_4 == "random" then
 			if arg_376_0.choked_commands == 0 then
-				if bs_v274_toggle[arg_376_3] == nil then bs_v274_toggle[arg_376_3] = false end
-				bs_v274_toggle[arg_376_3] = not bs_v274_toggle[arg_376_3]
-				if bs_v274_toggle[arg_376_3] then
-					bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
-				end
+				bs_v274[arg_376_3] = (bs_v274[arg_376_3] or 0) - 1
 			end
 
 			if (bs_v274[arg_376_3] or 0) <= 0 then
@@ -11600,7 +11679,7 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 			return
 		elseif bs_v1106 == "skitter" then
 			if arg_377_0.choked_commands == 0 then
-				bs_v136[arg_377_3] = (bs_v136[arg_377_3] + 1) % 65535
+				bs_v136[arg_377_3] = ((bs_v136[arg_377_3] or 0) + 1) % 65535
 			end
 
 			bs_v1084 = {
@@ -11618,7 +11697,7 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 				1
 			}
 			bs_v1092 = arg_377_2.skitter_deg and arg_377_2.skitter_deg:get() or 45
-			bs_v1101 = bs_v1084[bs_v136[arg_377_3] % #bs_v1084 + 1]
+			bs_v1101 = bs_v1084[(bs_v136[arg_377_3] or 0) % #bs_v1084 + 1]
 -- Use modifier_offset instead of modifying yaw_offset directly (prevents double application)
             arg_377_1.yaw_modifier = "Offset"
             arg_377_1.modifier_offset = bs_v1092 * bs_v1101
@@ -11629,7 +11708,7 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 
     if bs_v1106 == "skitter" then
 		if arg_377_0.choked_commands == 0 then
-			bs_v136[arg_377_3] = (bs_v136[arg_377_3] + 1) % 65535
+			bs_v136[arg_377_3] = ((bs_v136[arg_377_3] or 0) + 1) % 65535
 		end
 
 		bs_v1083 = {
@@ -11647,7 +11726,7 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 			1
 		}
 		bs_v1091 = arg_377_2.skitter_deg and arg_377_2.skitter_deg:get() or 45
-		bs_v1100 = bs_v1083[bs_v136[arg_377_3] % #bs_v1083 + 1]
+		bs_v1100 = bs_v1083[(bs_v136[arg_377_3] or 0) % #bs_v1083 + 1]
 -- Use modifier_offset instead of modifying yaw_offset directly
         arg_377_1.yaw_modifier = "Offset"
         arg_377_1.modifier_offset = bs_v1091 * bs_v1100
@@ -11661,8 +11740,6 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 		if bs_v73[arg_377_3] >= 7 then
 			bs_v73[arg_377_3] = 1
 		end
-
-		bs_v119[arg_377_3] = (bs_v119[arg_377_3] or 0) + 1
 
 		if bs_v1106 == "dual" then
 			bs_v1082 = arg_377_2.dual_distribution and arg_377_2.dual_distribution:get() or "alternate"
@@ -11698,6 +11775,8 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 		end
 	end
 
+	bs_v119[arg_377_3] = (bs_v119[arg_377_3] or 0) + 1
+
 	function bs_v1081(arg_378_0)
 		local var_378_0 = bs_v154[arg_377_3] or 0
 		local var_378_1 = arg_377_2.dual_left_off and arg_377_2.dual_left_off:get() or -60
@@ -11721,20 +11800,14 @@ function bs_aa_updater.update_modifier(arg_377_0, arg_377_1, arg_377_2, arg_377_
 		elseif bs_v1107 == "pulse" then
 			bs_v1087 = arg_377_2.modifier_pulse_a and arg_377_2.modifier_pulse_a:get() or -60
 			bs_v1094 = arg_377_2.modifier_pulse_b and arg_377_2.modifier_pulse_b:get() or 60
-			bs_v1098 = arg_377_2.modifier_pulse_rate and arg_377_2.modifier_pulse_rate:get() or 8
-			bs_v1102 = bs_v1098 > bs_v119[arg_377_3] % (bs_v1098 * 2) and bs_v1087 or bs_v1094
+			bs_v1102 = bs_v119[arg_377_3] % 2 == 0 and bs_v1087 or bs_v1094
 			arg_377_1.modifier_offset = bs_v1106 == "chaos" and bs_aa_updater.get_exploit_values(bs_v1102, bs_v73[arg_377_3]) or bs_v1106 == "dual" and bs_v1081(bs_v1102) or bs_v1102
 		elseif bs_v1107 == "custom" then
 			if arg_377_0.choked_commands == 0 then
-				bs_v103[arg_377_3] = (bs_v103[arg_377_3] or 0) + 1
+				bs_v88[arg_377_3] = (bs_v88[arg_377_3] or 1) + 1
 
-				if bs_v1111 <= (bs_v103[arg_377_3] or 0) then
-					bs_v103[arg_377_3] = 0
-					bs_v88[arg_377_3] = (bs_v88[arg_377_3] or 0) + 1
-
-					if bs_v1110 < bs_v88[arg_377_3] then
-						bs_v88[arg_377_3] = 1
-					end
+				if bs_v1110 < bs_v88[arg_377_3] then
+					bs_v88[arg_377_3] = 1
 				end
 			end
 
@@ -11986,7 +12059,212 @@ end
 -- #  [SEC-18] ANTI-AIM MAIN UPDATE (ORCHESTRATOR) - Unified Priority Gate
 -- #############################################################################
 function bs_aa_updater.update(arg_389_0, arg_389_1)
+	-- ========================================================================
+	-- GAME EVENTS - ABSOLUTE PRIORITY, CHECK FIRST BEFORE ANY OTHER WORK
+	-- Weapon Switch / Reload / On Peek timers. Runs even if state_name is nil.
+	-- ========================================================================
+	local bs_break_lc_cfg = bs_menu.antiaim.general.break_lc
+	local bs_force_defensive_on = false
+	pcall(function()
+		bs_force_defensive_on = bs_break_lc_cfg.select and bs_break_lc_cfg.select:get()
+	end)
+
+	local bs_force_game_events = false
+
+	if bs_force_defensive_on then
+		local var_292_0 = entity.get_local_player()
+		if var_292_0 and var_292_0:is_alive() and bs_break_lc_cfg and bs_break_lc_cfg.events then
+			-- Block Game Events while fakelag is active
+			local bs_fakelag_on = false
+			pcall(function()
+				bs_fakelag_on = bs_config.antiaim.fake_lag.enabled_pui:get() and (var_292_0.m_vecVelocity and var_292_0.m_vecVelocity:length2d() or 0) > 1.11
+			end)
+
+			if not bs_fakelag_on then
+				-- Weapon Switch: authoritative m_flNextAttack remaining time
+				if bs_break_lc_cfg.events:get("weapon switch") and var_292_0.m_flNextAttack and var_292_0.m_flNextAttack > globals.curtime then
+					local var_292_5 = var_292_0.m_flNextAttack - globals.curtime
+					if var_292_5 > 0 then
+						bs_defensive_mgr.game_events_hold_switch = math.ceil(var_292_5 * 64) + 2
+						bs_defensive_mgr.game_events_last_signal_switch = true
+						bs_v316["game events"] = 0
+					end
+				elseif bs_defensive_mgr.game_events_last_signal_switch then
+					bs_defensive_mgr.game_events_last_signal_switch = false
+				end
+
+				-- Weapon Reload: authoritative get_weapon_reload() remaining time
+				local var_292_1 = var_292_0:get_player_weapon()
+				if var_292_1 and bs_break_lc_cfg.events:get("weapon reload") then
+					local var_292_2, var_292_3 = pcall(function()
+						return var_292_1:get_weapon_reload()
+					end)
+					if var_292_2 and var_292_3 and var_292_3 > 0 then
+						bs_defensive_mgr.game_events_hold_reload = math.ceil(var_292_3 * 64) + 2
+						bs_defensive_mgr.game_events_last_signal_reload = true
+						bs_v316["game events"] = 0
+					end
+				elseif bs_defensive_mgr.game_events_last_signal_reload then
+					bs_defensive_mgr.game_events_last_signal_reload = false
+				end
+
+				-- On Peek: quickpeek + doubletap + exploit + running
+				if bs_break_lc_cfg.events:get("on peek") and bs_break_lc_cfg.conditions and bs_break_lc_cfg.conditions:get("quickpeek") then
+					local var_292_4, var_292_5 = pcall(function()
+						return bs_config.rage.main.double_tap:get()
+					end)
+					if var_292_4 and var_292_5 and rage.exploit:get() == 1 then
+						local var_292_6 = bs_get_state.get()
+						if var_292_6 == "running" then
+							bs_defensive_mgr.game_events_hold_peek = 8 + 2
+							bs_defensive_mgr.game_events_last_signal_peek = true
+							bs_v316["game events"] = 0
+						end
+					end
+				elseif bs_defensive_mgr.game_events_last_signal_peek then
+					bs_defensive_mgr.game_events_last_signal_peek = false
+				end
+			end
+		end
+	end
+
+	-- Decrement all active timers on non-choked commands (exact once per tick)
+	if arg_389_0.choked_commands == 0 then
+		if bs_defensive_mgr.game_events_hold_switch > 0 then
+			bs_defensive_mgr.game_events_hold_switch = bs_defensive_mgr.game_events_hold_switch - 1
+		end
+		if bs_defensive_mgr.game_events_hold_reload > 0 then
+			bs_defensive_mgr.game_events_hold_reload = bs_defensive_mgr.game_events_hold_reload - 1
+		end
+		if bs_defensive_mgr.game_events_hold_peek > 0 then
+			bs_defensive_mgr.game_events_hold_peek = bs_defensive_mgr.game_events_hold_peek - 1
+		end
+	end
+
+	-- Toggle body yaw fallback (for delay=0) on every send packet
+	if arg_389_0.choked_commands == 0 then
+		bs_v734 = not bs_v734
+	end
+
+	-- Game Events active if ANY timer > 0 - FORCE GATED, RUNS TO COMPLETION
+	-- Block Game Events while fakelag is active
+	local bs_ge_fakelag_block = false
+	pcall(function()
+		local lp = entity.get_local_player()
+		bs_ge_fakelag_block = lp and lp:is_alive() and bs_config.antiaim.fake_lag.enabled_pui:get() and (lp.m_vecVelocity and lp.m_vecVelocity:length2d() or 0) > 1.11
+	end)
+
+	bs_force_game_events = (not bs_ge_fakelag_block) and ((bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek > 0))
+	if bs_force_game_events then
+		bs_defensive_mgr.is_active = false
+		bs_legit_aa.is_working = false
+		if arg_389_1 then
+			bs_async_flip(arg_389_1)
+
+			-- Apply current state's builder preset (Game Events overlays active state AA)
+			local bs_v1138_ge = bs_aa_updater.get_preset(arg_389_1)
+			if bs_v1138_ge then
+				bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+				bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+				bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+			end
+		else
+			-- No state resolved yet: apply minimal Game Events overlay
+			bs_aa_state_obj.pitch = "Down"
+			bs_aa_state_obj.yaw = "backward"
+			bs_aa_state_obj.yaw_base = "At target"
+			bs_aa_state_obj.body_yaw = true
+			bs_aa_state_obj.inverter = false
+			bs_aa_state_obj.left_limit = 58
+			bs_aa_state_obj.right_limit = 58
+			bs_aa_state_obj.yaw_modifier = "Disabled"
+			bs_aa_state_obj.modifier_offset = 0
+		end
+
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
+		bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, "game events", false)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+
+		return  -- ABSOLUTE PRIORITY: nothing below runs while Game Events is active
+	end
+
+	-- ========================================================================
+	-- LC TRIGGER - 2nd highest priority (below Game Events, above Freestanding)
+	-- Overwrites Standing AA when lag compensation break triggers
+	-- ========================================================================
+	local bs_lc_trigger_on = false
+	pcall(function()
+		bs_lc_trigger_on = bs_break_lc.should_force(arg_389_0)
+	end)
+	if bs_lc_trigger_on then
+		bs_defensive_mgr.is_active = false
+		bs_legit_aa.is_working = false
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		local bs_v1138_lc = bs_aa_updater.get_preset(arg_389_1)
+		if bs_v1138_lc then
+			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_lc, arg_389_1)
+			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_lc, arg_389_1)
+			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_lc, arg_389_1)
+		end
+		bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		return
+	end
+
+	-- ========================================================================
+	-- Normal anti-aim work (only runs when Game Events is NOT active)
+	-- ========================================================================
 	update_fakelag(arg_389_0)
+
+	-- ========================================================================
+	-- Tickbase / choke customization per state (builder "tickbase" UI)
+	-- Overrides fakelag limit when state's choke mode is "custom"
+	-- ========================================================================
+	if bs_v570 and bs_v570[arg_389_1] then
+		local bs_choke_cfg = bs_v570[arg_389_1]
+		local bs_choke_mode = bs_choke_cfg.choke and bs_choke_cfg.choke:get()
+
+		if bs_choke_mode == "custom" then
+			if not bs_choke_seq_counter then bs_choke_seq_counter = {} end
+			if not bs_choke_cur_val then bs_choke_cur_val = {} end
+
+			local bs_choke_method = bs_choke_cfg.choke_method and bs_choke_cfg.choke_method:get() or "range"
+
+			if bs_choke_method == "range" then
+				local bs_choke_min = bs_choke_cfg.choke_from and bs_choke_cfg.choke_from:get() or 8
+				local bs_choke_max = bs_choke_cfg.choke_to and bs_choke_cfg.choke_to:get() or 16
+				if bs_choke_max < bs_choke_min then
+					bs_choke_min, bs_choke_max = bs_choke_max, bs_choke_min
+				end
+				if arg_389_0.choked_commands == 0 then
+					bs_choke_cur_val[arg_389_1] = math.random(bs_choke_min, bs_choke_max)
+				end
+			elseif bs_choke_method == "sequence" then
+				local bs_choke_steps = bs_choke_cfg.choke_sliders and bs_choke_cfg.choke_sliders:get() or 2
+				if arg_389_0.choked_commands == 0 then
+					local bs_choke_counter = (bs_choke_seq_counter[arg_389_1] or 0) + 1
+					if bs_choke_counter > bs_choke_steps then
+						bs_choke_counter = 1
+					end
+					bs_choke_seq_counter[arg_389_1] = bs_choke_counter
+				end
+				local bs_step_cfg = bs_choke_cfg["choke1_" .. (bs_choke_seq_counter[arg_389_1] or 1)]
+				bs_choke_cur_val[arg_389_1] = bs_step_cfg and bs_step_cfg:get() or 4
+			end
+
+			if bs_choke_cur_val[arg_389_1] and bs_choke_cur_val[arg_389_1] > 0 then
+				pcall(function()
+					bs_config.antiaim.fake_lag.limit_pui:override(bs_choke_cur_val[arg_389_1])
+				end)
+			end
+		end
+	end
+
 	bs_aa_state_obj:define()
 	pcall(function()
 		bs_config.antiaim.angles.hidden:override(false)
@@ -12001,105 +12279,65 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	-- Higher priority SUPPRESSES lower priority (no overwrite races)
 	-- ========================================================================
 
-	-- 1. GAME EVENTS - ABSOLUTE PRIORITY, FORCE-GATED, RUNS TO COMPLETION
-	-- Uses authoritative sources: m_flNextAttack (weapon switch), get_weapon_reload() (reload)
-	-- On peek: quickpeek + doubletap + exploit + running state
-	-- Once active, CANNOT be overridden by Freestanding, Manual AA, or any other system
-	-- ========================================================================
-	local bs_break_lc_cfg = bs_menu.antiaim.general.break_lc
-
-	-- Game Events require Force Defensive to be enabled
-	local bs_force_defensive_on = false
+	-- Pre-compute safe head state for legit AA condition
+	local bs_safe_head_on = false
+	local bs_sh_fakelag_block = false
 	pcall(function()
-		bs_force_defensive_on = bs_break_lc_cfg.select and bs_break_lc_cfg.select:get()
+		local lp = entity.get_local_player()
+		bs_sh_fakelag_block = lp and lp:is_alive() and bs_config.antiaim.fake_lag.enabled_pui:get() and (lp.m_vecVelocity and lp.m_vecVelocity:length2d() or 0) > 1.11
 	end)
-
-	if bs_force_defensive_on then
-		local var_292_0 = entity.get_local_player()
-		if var_292_0 and var_292_0:is_alive() and bs_break_lc_cfg and bs_break_lc_cfg.events then
-			-- Weapon Switch: authoritative m_flNextAttack remaining time
-			if bs_break_lc_cfg.events:get("weapon switch") and var_292_0.m_flNextAttack and var_292_0.m_flNextAttack > globals.curtime then
-				local var_292_5 = var_292_0.m_flNextAttack - globals.curtime
-				if var_292_5 > 0 then
-					bs_defensive_mgr.game_events_hold_switch = math.ceil(var_292_5 * 64) + 2
-					bs_defensive_mgr.game_events_last_signal_switch = true
-					bs_v316["game events"] = 0
-				end
-			elseif bs_defensive_mgr.game_events_last_signal_switch then
-				bs_defensive_mgr.game_events_last_signal_switch = false
-			end
-
-			-- Weapon Reload: authoritative get_weapon_reload() remaining time
-			local var_292_1 = var_292_0:get_player_weapon()
-			if var_292_1 and bs_break_lc_cfg.events:get("weapon reload") then
-				local var_292_2, var_292_3 = pcall(function()
-					return var_292_1:get_weapon_reload()
-				end)
-				if var_292_2 and var_292_3 and var_292_3 > 0 then
-					bs_defensive_mgr.game_events_hold_reload = math.ceil(var_292_3 * 64) + 2
-					bs_defensive_mgr.game_events_last_signal_reload = true
-					bs_v316["game events"] = 0
-				end
-			elseif bs_defensive_mgr.game_events_last_signal_reload then
-				bs_defensive_mgr.game_events_last_signal_reload = false
-			end
-
-			-- On Peek: quickpeek + doubletap + exploit + running
-			if bs_break_lc_cfg.events:get("on peek") and bs_break_lc_cfg.conditions and bs_break_lc_cfg.conditions:get("quickpeek") then
-				local var_292_4, var_292_5 = pcall(function()
-					return bs_config.rage.main.double_tap:get()
-				end)
-				if var_292_4 and var_292_5 and rage.exploit:get() == 1 then
-					local var_292_6 = bs_get_state.get()
-					if var_292_6 == "running" then
-						bs_defensive_mgr.game_events_hold_peek = 8 + 2  -- fixed 8 ticks + 2 safety
-						bs_defensive_mgr.game_events_last_signal_peek = true
-						bs_v316["game events"] = 0
-					end
-				end
-			elseif bs_defensive_mgr.game_events_last_signal_peek then
-				bs_defensive_mgr.game_events_last_signal_peek = false
-			end
-		end
+	if not bs_sh_fakelag_block then
+		pcall(function()
+			bs_safe_head_on = bs_safe_head.think(arg_389_0)
+		end)
 	end
 
-	-- Decrement all active timers on non-choked commands (exact once per tick)
-	local bs_decrement_hold = (arg_389_0.choked_commands == 0)
-	if bs_decrement_hold then
-		if bs_defensive_mgr.game_events_hold_switch > 0 then
-			bs_defensive_mgr.game_events_hold_switch = bs_defensive_mgr.game_events_hold_switch - 1
-		end
-		if bs_defensive_mgr.game_events_hold_reload > 0 then
-			bs_defensive_mgr.game_events_hold_reload = bs_defensive_mgr.game_events_hold_reload - 1
-		end
-		if bs_defensive_mgr.game_events_hold_peek > 0 then
-			bs_defensive_mgr.game_events_hold_peek = bs_defensive_mgr.game_events_hold_peek - 1
-		end
-	end
-
-	-- Game Events active if ANY timer > 0 - FORCE GATED, RUNS TO COMPLETION
-	local bs_force_game_events = (bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek > 0)
-	if bs_force_game_events then
-		bs_defensive_mgr.is_active = false
-		bs_legit_aa.is_working = false
+	-- 1. LEGIT AA - Highest priority (matches TRUE SOURCE behavior)
+	local bs_v1139 = bs_legit_aa.think(arg_389_0)
+	bs_legit_aa.is_working = bs_v1139
+	if bs_v1139 then
+		bs_v1138 = bs_aa_updater.get_preset(arg_389_1)
+		bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
 		bs_async_flip(arg_389_1)
 
-		-- Apply current state's builder preset (Game Events overlays active state AA)
-		local bs_v1138_ge = bs_aa_updater.get_preset(arg_389_1)
-		if bs_v1138_ge then
-			bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
-			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
-			bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138_ge, arg_389_1)
+		pcall(function()
+			local var_389_18_1 = bs_v1138
+			if var_389_18_1 and var_389_18_1.abf_on_shot and var_389_18_1.abf_on_shot:get() and arg_389_0.in_attack and not bs_anti_brute.on_shot_last_attack then
+				bs_v591({ name = "?", time = globals.curtime }, true, true)
+				pcall(function()
+					local var_389_18_2 = bs_menu.info and bs_menu.info.notify
+					local var_389_18_3 = var_389_18_2 and var_389_18_2.col_abf_hit and var_389_18_2.col_abf_hit:get() or color(255, 160, 80, 255)
+					bs_notify.new({
+						"anti-bruteforce triggered by ",
+						"local shot",
+						" due to on-shot impact - angle shifted"
+					}, var_389_18_3)
+				end)
+			end
+			bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
+		end)
+
+		
+
+		bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_safe_head_on)
+		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
+
+		if not bs_v1142 and not bs_safe_head_on then
+			bs_anti_brute.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_v1138)
 		end
 
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
-		bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, "game events", false)
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
+		if not bs_safe_head_on then
+			bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
+		end
 
-		return  -- ABSOLUTE PRIORITY: nothing below runs while Game Events is active
+		bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, arg_389_1)
+		bs_break_lc.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+
+		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, arg_389_1)
+
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		return
 	end
 
 	-- 2. FREESTANDING - Absolute priority when active (below Game Events)
@@ -12135,26 +12373,12 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	end
 
 	-- 4. SAFE HEAD - Right below Manual AA, overrides everything below
-	local bs_safe_head_on = false
-	pcall(function()
-		bs_safe_head_on = bs_safe_head.think(arg_389_0)
-	end)
 	if bs_safe_head_on then
 		bs_defensive_mgr.is_active = false
 		bs_legit_aa.is_working = false
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		bs_safe_head.update(arg_389_0, bs_aa_state_obj, arg_389_1)
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		return
-	end
-
-	-- 5. LEGIT AA - Overrides Defensive AA & Normal AA
-	local bs_v1139 = bs_legit_aa.think(arg_389_0)
-	bs_legit_aa.is_working = bs_v1139
-	if bs_v1139 then
-		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, arg_389_1)
 		bs_aa_state_obj:run()
 		bs_v474(arg_389_0)
 		return
@@ -12212,10 +12436,6 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 		end
 		bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
 	end)
-
-	if arg_389_0.choked_commands == 0 then
-		bs_v734 = not bs_v734
-	end
 
 	bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, arg_389_1, bs_safe_head_on)
 	pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
@@ -12282,12 +12502,10 @@ events.createmove(function(cmd)
 		return
 	end
 
+	-- Always run the orchestrator so Game Events can be evaluated
+	-- even when state resolution returns nil (Game Events is state-agnostic)
+	bs_legit_aa.is_working = bs_legit_aa.think(cmd)
 	local state_name = bs_get_state.get(bs_legit_aa.is_working)
-
-	if not state_name then
-		return
-	end
-
 	bs_aa_updater.update(cmd, state_name)
 end)
 
@@ -12648,7 +12866,9 @@ events.aim_ack(function(arg_401_0)
 			bs_v1166 = bs_v1145 and "" or " / mismatched hg ~ " .. bs_v1176 .. "(" .. bs_v1178 .. ")"
 			bs_v1168 = bs_v1147 and "" or " / mismatched dmg ~ " .. tostring(arg_401_0.damage) .. "(" .. tostring(arg_401_0.wanted_damage) .. ")"
 
-			print_raw(("%s · hit %s's %s for %s damage ( HC ~ %s%% / R.HC ~ %s%% / bt ~ %sticks%s%s )"):format(bs_v1156, bs_v1162, bs_v1176, tostring(arg_401_0.damage), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.backtrack), bs_v1166, bs_v1168))
+			print_raw(("%s · hit %s's %s for %s damage ( HC ~ %s%% / R.HC ~ %s%% / bt ~ %sticks%s )"):format(bs_v1156, bs_v1162, bs_v1176, tostring(arg_401_0.damage), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.backtrack), bs_v1166, bs_hc_extrapolated_target and " / extrapolated ~ " .. bs_hc_extrapolated_target .. " ~ " .. tostring(bs_hc_extrapolated_hc) .. "%%" or ""))
+			bs_hc_extrapolated_target = nil
+			bs_hc_extrapolated_hc = nil
 		end
 	else
 		if not bs_v1143.log_misses:get() then
@@ -12749,7 +12969,7 @@ events.aim_ack(function(arg_401_0)
 				},
 				{
 					bs_v1152,
-					tostring(arg_401_0.state)
+					tostring(arg_401_0.state or "unknown")
 				},
 				{
 					bs_v1174,
@@ -12809,7 +13029,9 @@ events.aim_ack(function(arg_401_0)
 			bs_v1163 = bs_v706(bs_v1154, bs_v1175:to_hex())
 			bs_v1167 = bs_v1150 and "" or " / mismatched hg ~ " .. bs_v1146 .. "(" .. (bs_v1148 or "?") .. ")"
 
-			print_raw(("%s · missed %s's %s due to %s ( HC ~ %s%% / R.HC ~ %s%% / dmg ~ %s / bt ~ %sticks%s )"):format(bs_v1158, bs_v1163, bs_v1146, tostring(arg_401_0.state), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.wanted_damage), tostring(arg_401_0.backtrack or 0), bs_v1167))
+			print_raw(("%s · missed %s's %s due to %s ( HC ~ %s%% / R.HC ~ %s%% / dmg ~ %s / bt ~ %sticks%s )"):format(bs_v1158, bs_v1163, bs_v1146, tostring(arg_401_0.state or "unknown"), tostring(bs_active_hc_value or 0), tostring(arg_401_0.hitchance), tostring(arg_401_0.wanted_damage), tostring(arg_401_0.backtrack or 0), bs_v1167, bs_hc_extrapolated_target and " / extrapolated ~ " .. bs_hc_extrapolated_target .. " ~ " .. tostring(bs_hc_extrapolated_hc) .. "%%" or ""))
+			bs_hc_extrapolated_target = nil
+			bs_hc_extrapolated_hc = nil
 		end
 	end
 end)
@@ -13751,7 +13973,7 @@ pcall(function()
 end)
 
 bs_v705 = {}
-bs_v716 = render.load_font("Verdana", vector(0, 10, 3), "ab")
+bs_v716 = render.load_font("Verdana", vector(0, 8, 3), "ab")
 bs_v730 = 2
 bs_v743 = render.load_font("Verdana", 10, "ab")
 bs_v753 = render.load_font("Verdana", 14, "ab")
@@ -13861,10 +14083,10 @@ bs_v273 = render.load_font("Verdana", 22, "ab")
 bs_v287 = "nl\\bluesense\\bluesense_E_logo.png"
 bs_v301 = "https://cdn.jsdelivr.net/gh/yirahvh-spec/bluesense@main/bluesense_E_logo.png"
 bs_v325 = nil
-bs_v338 = 120
-bs_v350 = 92
-bs_v364 = 34
-bs_v372 = 15
+bs_v338 = 24
+bs_v350 = 18
+bs_v364 = 6
+bs_v372 = 6
 bs_v382 = bs_position_dragger:new("wm_logo_w", vector(bs_screen_size.x - 80, 80), "xy")
 
 ;(function()
@@ -15240,7 +15462,7 @@ function bs_v371(arg_486_0)
 		return 0
 	end
 
-	local var_486_0 = entity.get_threat(true)
+	local var_486_0 = entity.get_threat()
 
 	if not var_486_0 or var_486_0:is_dormant() or not var_486_0:is_alive() then
 		return 0
@@ -15936,6 +16158,8 @@ function bs_v420(arg_501_0, arg_501_1, arg_501_2, arg_501_3)
 
 			if bs_v1584 then
 				bs_v397.hs.last_text = bs_v1615
+			else
+				bs_v397.hs.last_text = ""
 			end
 
 			if not bs_v1584 or bs_v1594 == 0 then
@@ -17847,7 +18071,7 @@ events.createmove(function(arg_554_0)
 		return
 	end
 
-	if entity.get_threat(true) then
+	if entity.get_threat() then
 		bs_v116 = {}
 
 		return
@@ -18032,20 +18256,50 @@ function bs_v210(arg_556_0)
 			end)
 		end
 	elseif var_556_3 and var_556_2:get("on ground") then
-		local var_556_5 = bs_menu.misc.movement.on_ground_type:get()
+		local var_556_vel = var_556_0.m_vecVelocity and var_556_0.m_vecVelocity:length2d() or 0
+		if var_556_vel >= 1.11 then
+			local var_556_5 = bs_menu.misc.movement.on_ground_type:get()
 
 		if var_556_5 == "static" then
 			var_556_0.m_flPoseParameter[0] = math.max(-1, math.min(1, 1))
 
 			bs_config.antiaim.misc.leg_movement:override("Sliding")
 		elseif var_556_5 == "jitter" then
-			var_556_0.m_flPoseParameter[globals.client_tick % 3] = math.max(-1, math.min(1, 0.8))
+			if not bs_anim_jitter_counter then bs_anim_jitter_counter = 0 end
+			bs_anim_jitter_counter = bs_anim_jitter_counter + 1
+			if bs_anim_jitter_counter >= bs_menu.misc.movement.jitter_speed:get() then
+				bs_anim_jitter_counter = 0
+				var_556_0.m_flPoseParameter[globals.client_tick % 3] = math.max(-1, math.min(1, bs_menu.misc.movement.jitter_value:get()))
+			end
 
 			bs_config.antiaim.misc.leg_movement:override("Sliding")
 		elseif var_556_5 == "reverse running" then
 			var_556_0.m_flPoseParameter[7] = math.max(0, math.min(1, 0.5))
 
 			bs_config.antiaim.misc.leg_movement:override("Walking")
+		end
+	end
+	end
+
+	if var_556_3 and var_556_2:get("standing") then
+		local var_556_vel = var_556_0.m_vecVelocity and var_556_0.m_vecVelocity:length2d() or 0
+		if var_556_vel < 1.11 then
+			local var_556_6 = bs_menu.misc.movement.standing_type:get()
+
+			if var_556_6 == "static" then
+				var_556_0.m_flPoseParameter[0] = math.max(-1, math.min(1, 1))
+
+				bs_config.antiaim.misc.leg_movement:override("Sliding")
+			elseif var_556_6 == "jitter" then
+				if not bs_anim_stand_jitter_counter then bs_anim_stand_jitter_counter = 0 end
+				bs_anim_stand_jitter_counter = bs_anim_stand_jitter_counter + 1
+				if bs_anim_stand_jitter_counter >= bs_menu.misc.movement.standing_jitter_speed:get() then
+					bs_anim_stand_jitter_counter = 0
+					var_556_0.m_flPoseParameter[globals.client_tick % 3] = math.max(-1, math.min(1, bs_menu.misc.movement.standing_jitter_value:get()))
+				end
+
+				bs_config.antiaim.misc.leg_movement:override("Sliding")
+			end
 		end
 	end
 
@@ -19751,7 +20005,7 @@ function bs_voice_handler(arg_633_0)
 end
 
 function bs_v291()
-	bs_iter_players(false, true, function(arg_635_0)
+	bs_iter_players(false, false, function(arg_635_0)
 		bs_v244(arg_635_0)
 	end)
 
@@ -20823,11 +21077,13 @@ events.createmove(function(cmd)
 	if not (bs_config.rage.main.double_tap and bs_config.rage.main.double_tap:get()) then return end
 	if not cmd.in_attack then return end
 	
-	-- Only apply when DT is charged and ready to fire (exploit == 1)
 	local exploit = rage.exploit
 	if not exploit or exploit:get() ~= 1 then return end
+
+	local wc = bs_select_weapon_class()
+	if not wc or wc == "awp" or wc == "scout" or wc == "r8" then return end
 	
-local max_ticks = cvar.sv_maxusrcmdprocessticks:int()
+	local max_ticks = cvar.sv_maxusrcmdprocessticks:int()
 	local safe_max = max_ticks - 2
 	local instant_max = 15
 
@@ -20850,6 +21106,26 @@ end)
 -- override and feeds the ESP flag. Enemy roster is refreshed from entity.get_players
 -- each tick so defensive detection and the state conditions have live data.
 do
+	local function bs_extrapolate(origin, velocity, ticks)
+		local tickinterval = globals.tickinterval
+		local gravity = cvar.sv_gravity:float() * tickinterval
+		local jump_impulse = cvar.sv_jump_impulse:float() * tickinterval
+		local pos = vector(origin.x, origin.y, origin.z)
+		local vel = vector(velocity.x, velocity.y, velocity.z)
+		local z_acc = vel.z > 0 and -gravity or jump_impulse
+		for _ = 1, ticks do
+			local prev = pos
+			pos = vector(
+				pos.x + vel.x * tickinterval,
+				pos.y + vel.y * tickinterval,
+				pos.z + (vel.z + z_acc) * tickinterval
+			)
+			if utils.trace_line(prev, pos, nil, 2).fraction <= 0.99 then
+				return prev
+			end
+		end
+		return pos
+	end
 	local S = {
 		enemies = {},            -- [idx] = { ent, name, hp, armor, alive, dormant, def, detected_until, samples, last_seen }
 		hc_ref = nil,
@@ -20968,10 +21244,11 @@ do
 		local ok, players = pcall(entity.get_players, true, false)
 		if not ok or type(players) ~= "table" then return end
 		local seen = {}
-for _, p in ipairs(players) do
+	for _, p in ipairs(players) do
 		if p ~= nil then
 			local ok_a, al = pcall(function() return p:is_alive() end)
-			if ok_a and al == true then
+			local ok_d, dm = pcall(function() return p:is_dormant() end)
+			if ok_a and al == true and not (ok_d and dm) then
 				local idx = enemy_index(p)
 				seen[idx] = true
 				update_defensive(p, idx, now)
@@ -21005,7 +21282,7 @@ for _, p in ipairs(players) do
 			if not (val and val > 0) then return false end
 			return true
 		end
-		-- No Scope: scoped weapon + not scoped + past the per-weapon re-scope window.
+-- No Scope: scoped weapon + not scoped + past the per-weapon re-scope window.
 		if scoped_weapon then
 			local scoped = true
 			local ok, value = pcall(function()
@@ -21040,115 +21317,122 @@ for _, p in ipairs(players) do
 			end
 			local limit = 255
 			if wc == "auto" then limit = 765 end
-if not scoped and not auto_scope and dist and dist <= limit and dist > 0 and eligible("noscope") then state = "noscope" end
+ if not scoped and not auto_scope and dist and dist <= limit and dist > 0 and eligible("noscope") then state = "noscope" end
 	end
 
-	-- Enemy HP threshold (wins over all except noscope)
-	if not state then
-		local thr = 50
-		pcall(function()
-			local s = bs_v718.hc_cond_hp_threshold and bs_v718.hc_cond_hp_threshold[wc or "awp"]
-			thr = s and s:get() or 50
-		end)
-	local ehp = (rec and rec.hp) or 0
-	local e_dist = 0
-	pcall(function()
-		local ep = threat:get_origin()
+	-- LC/Defensive (priority 2) - max 1800u
+	if not state and rec and rec.def and eligible("lc") then
+		local ep = nil
+		pcall(function() ep = threat:get_origin() end)
 		if lp_pos and ep then
 			local dx = ep.x - lp_pos.x
 			local dy = ep.y - lp_pos.y
 			local dz = ep.z - lp_pos.z
-			e_dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+			local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+			if dist <= 1800 then state = "lc" end
 		end
-	end)
-	if thr > 0 and ehp > 0 and ehp <= thr and e_dist <= 380 and eligible("enemyhp") then state = "enemyhp" end
 	end
 
-
-		-- Shared vertical / distance data for Below, Air and Above.
-		local lp_z = (lp_pos and lp_pos.z) or 0
-		local ep_z = 0
-		pcall(function() ep_z = threat:get_origin().z end)
-		local above_dist = 0
-		if lp_pos then
-			local ep = nil
-			pcall(function() ep = threat:get_origin() end)
-			if ep then
-				local dx = ep.x - lp_pos.x
-				local dy = ep.y - lp_pos.y
-				local dz = ep.z - lp_pos.z
-				above_dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-			end
+	-- Shared vertical / distance data for Below, Air and Above.
+	local lp_z = (lp_pos and lp_pos.z) or 0
+	local ep_z = 0
+	pcall(function() ep_z = threat:get_origin().z end)
+	local above_dist = 0
+	if lp_pos then
+		local ep = nil
+		pcall(function() ep = threat:get_origin() end)
+		if ep then
+			local dx = ep.x - lp_pos.x
+			local dy = ep.y - lp_pos.y
+			local dz = ep.z - lp_pos.z
+			above_dist = math.sqrt(dx * dx + dy * dy + dz * dz)
 		end
+	end
 
--- Above
--- Above
-local grounded = false
-pcall(function() grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
-if not state and ep_z and lp_z and ep_z > lp_z + 60 and above_dist <= 4000 and grounded and eligible("above") then state = "above" end
--- Below
--- Below
-if not state and ep_z and lp_z and ep_z < lp_z - 65 and eligible("below") then state = "below" end
--- LC/Defensive
-if not state and rec and rec.def and eligible("lc") then state = "lc" end
--- In Air
+-- Below (priority 3) - max 1800u
+if not state and ep_z and lp_z and ep_z < lp_z - 65 and eligible("below") then
+	if above_dist <= 1800 then state = "below" end
+end
+
+-- In Air (priority 4) - max 1800u
 if not state then
 	local in_air = false
 	pcall(function() in_air = not bit.band(threat.m_fFlags or 0, 1) == 1 end)
 	if in_air then
-		local air_dist = 0
-		if lp_pos then
-			local ep = nil
-			pcall(function() ep = threat:get_origin() end)
-			if ep then
-				local dx = ep.x - lp_pos.x
-				local dy = ep.y - lp_pos.y
-				local dz = ep.z - lp_pos.z
-				air_dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-			end
-		end
-		if air_dist <= 1000 and air_dist >= 144 and eligible("air") then state = "air" end
+		if above_dist <= 1800 and eligible("air") then state = "air" end
 	end
 end
-		-- Standing: enemy horizontal velocity < 1 for >0.9s (dwell time).
-		if not state then
-			local grounded = false
-			pcall(function() grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
-			local local_grounded = false
-			pcall(function() local_grounded = bit.band(local_player.m_fFlags or 0, 1) == 1 end)
-			if grounded then
-				local vel = 0
-			pcall(function()
-				vel = threat.m_vecVelocity and (threat.m_vecVelocity.x * threat.m_vecVelocity.x + threat.m_vecVelocity.y * threat.m_vecVelocity.y) or 0
-			end)
-			local now = globals.curtime or 0
-			local key = tostring(threat)
-			S.stand_dwell = S.stand_dwell or {}
-			if vel >= 1 then
-				S.stand_dwell[key] = now
-			else
-				S.stand_dwell[key] = S.stand_dwell[key] or now
-				if (now - S.stand_dwell[key]) >= 0.9 and eligible("stand") then state = "stand" end
-			end
-			end
+
+-- Above (priority 5) - max 1800u
+local grounded = false
+pcall(function() grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
+if not state and ep_z and lp_z and ep_z > lp_z + 60 and above_dist <= 1800 and grounded and eligible("above") then state = "above" end
+
+-- Standing: enemy horizontal velocity < 1 for >0.9s (dwell time). (priority 6) - max 1800u
+if not state then
+	local grounded = false
+	pcall(function() grounded = bit.band(threat.m_fFlags or 0, 1) == 1 end)
+	local local_grounded = false
+	pcall(function() local_grounded = bit.band(local_player.m_fFlags or 0, 1) == 1 end)
+	if grounded then
+		local vel = 0
+	pcall(function()
+		vel = threat.m_vecVelocity and (threat.m_vecVelocity.x * threat.m_vecVelocity.x + threat.m_vecVelocity.y * threat.m_vecVelocity.y) or 0
+	end)
+	local now = globals.curtime or 0
+	local key = tostring(threat)
+	S.stand_dwell = S.stand_dwell or {}
+	if vel >= 1 then
+		S.stand_dwell[key] = now
+	else
+		S.stand_dwell[key] = S.stand_dwell[key] or now
+		if (now - S.stand_dwell[key]) >= 0.9 and eligible("stand") then
+			if above_dist <= 1800 then state = "stand" end
 		end
-		-- Enemy moving (in air or moving)
-		if not state then
-			local evel = 0
-			pcall(function()
-				local vel = threat.m_vecVelocity
-				if vel then evel = (vel.x * vel.x + vel.y * vel.y) end
-			end)
-			local inair = false
-			pcall(function() inair = not bit.band(threat.m_fFlags or 0, 1) == 1 end)
-			if inair or evel >= 100 then if eligible("enemymove") then state = "enemymove" end end
-		end
+	end
+	end
+end
+
+-- Enemy moving (in air or moving) (priority 7) - max 1800u
+if not state then
+	local evel = 0
+	pcall(function()
+		local vel = threat.m_vecVelocity
+		if vel then evel = (vel.x * vel.x + vel.y * vel.y) end
+	end)
+	local inair = false
+	pcall(function() inair = not bit.band(threat.m_fFlags or 0, 1) == 1 end)
+	if inair or evel >= 100 then
+		if eligible("enemymove") and above_dist <= 1800 then state = "enemymove" end
+	end
+end
+
+-- Enemy HP threshold (priority 8, wins over all except noscope) - max 1800u
+if not state then
+	local thr = 50
+	pcall(function()
+		local s = bs_v718.hc_cond_hp_threshold and bs_v718.hc_cond_hp_threshold[wc or "awp"]
+		thr = s and s:get() or 50
+	end)
+local ehp = (rec and rec.hp) or 0
+local e_dist = 0
+pcall(function()
+	local ep = threat:get_origin()
+	if lp_pos and ep then
+		local dx = ep.x - lp_pos.x
+		local dy = ep.y - lp_pos.y
+		local dz = ep.z - lp_pos.z
+		e_dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+	end
+end)
+if thr > 0 and ehp > 0 and ehp <= thr and e_dist <= 1800 and eligible("enemyhp") then state = "enemyhp" end
+end
 
 				return state
 	end
 
 	-- Resolve the condition-based hitchance for the current threat.
-	local function decide_for_threat(rec, local_player, threat)
+local function decide_for_threat(rec, local_player, threat)
 		local cond_hc = 0
 		local state = nil
 		local wc = bs_select_weapon_class()
@@ -21171,10 +21455,77 @@ end
 						end
 					end
 				end
+
+				-- Defensive/LC hitchance override: when the ENEMY is in defensive state,
+				-- apply LC/Defensive condition HC (rec.def tracks enemy defensive state)
+				if rec and rec.def and bs_v718.hc_conditions and bs_v718.hc_conditions:get() then
+					state = "lc"
+					local en = bs_v718.hc_cond_state_en and bs_v718.hc_cond_state_en["lc"]
+					local sl = bs_v718.hc_cond_state_sl and bs_v718.hc_cond_state_sl["lc"]
+					local enabled = false
+					pcall(function() enabled = en and en:get() end)
+					if enabled and sl then
+						local wsl = sl[wc]
+						local wpen = bs_v718.hc_cond_state_wpn and bs_v718.hc_cond_state_wpn["lc"] and bs_v718.hc_cond_state_wpn["lc"][wc]
+						local wpen_on = true
+						if wpen then pcall(function() wpen_on = wpen:get() end) end
+						if wpen_on then
+							local def_hc = wsl and wsl:get() or 0
+							pcall(function() cond_hc = math.max(cond_hc or 0, def_hc) end)
+						end
+					end
+				end
+
+				-- Extrapolation per condition per weapon: if the matched condition has extrapolation enabled for this weapon, run prediction
+				local bs_hc_before_ext = cond_hc or 0
+				if state and cond_hc > 0 and threat then
+					local ext_en = bs_v718.hc_cond_state_ext_en and bs_v718.hc_cond_state_ext_en[state] and bs_v718.hc_cond_state_ext_en[state][wc]
+					local ext_on = false
+					if ext_en then pcall(function() ext_on = ext_en:get() end) end
+					if ext_on then
+						local pred_ticks = 3
+						local ticks_sl = bs_v718.hc_cond_state_ext_ticks and bs_v718.hc_cond_state_ext_ticks[state] and bs_v718.hc_cond_state_ext_ticks[state][wc]
+						if ticks_sl then pcall(function() pred_ticks = ticks_sl:get() or 3 end) end
+						if pred_ticks ~= 0 then
+							local ep = nil
+							local evel = nil
+							pcall(function() ep = threat:get_origin() end)
+							pcall(function() evel = threat.m_vecVelocity end)
+							if ep and evel then
+								local pred_pos = bs_extrapolate(ep, evel, pred_ticks)
+								local dx = pred_pos.x - ep.x
+								local dy = pred_pos.y - ep.y
+								local pred_dist = math.sqrt(dx * dx + dy * dy)
+								-- Velocity per tick (units per tick)
+								local tick_interval = globals.tickinterval or 0.015625
+								local vel_per_tick = math.sqrt(evel.x * evel.x + evel.y * evel.y) * tick_interval
+								-- Inverse exponential: more movement per tick = exponentially lower HC
+								-- Base curve: HC = base_hc * exp(-k * vel_per_tick)
+								-- k tuned so 100u/tick ≈ 50% HC reduction, 200u/tick ≈ 75% reduction
+								local k = 0.00693  -- ln(2) / 100
+								local penalty_factor = math.exp(-k * vel_per_tick)
+								cond_hc = math.floor(cond_hc * penalty_factor + 0.5)
+								-- Clamp minimum
+								if cond_hc < 5 then cond_hc = 5 end
+								-- Halve HC for auto snipers
+								if wc == "auto" then
+									cond_hc = math.floor(cond_hc * 0.5 + 0.5)
+								end
+								if cond_hc ~= bs_hc_before_ext then
+									local tgt_name = "?"
+									pcall(function() tgt_name = threat:get_name() end)
+									bs_hc_extrapolated_target = tgt_name
+									bs_hc_extrapolated_hc = cond_hc
+								end
+							end
+						end
+					end
+				end
 			end
 		end
-		bs_active_hc_state = state
-		return (cond_hc and cond_hc > 0) and cond_hc or 0
+
+	bs_active_hc_state = state
+	return (cond_hc and cond_hc > 0) and cond_hc or 0
 	end
 
 	local function apply_threat_overrides(local_player, threat)
@@ -21249,7 +21600,9 @@ end
 		S.stand_dwell = {}
 		release_overrides()
 		bs_active_hc_value = 0
-		bs_active_hc_state = nil
+bs_active_hc_state = nil
+bs_hc_extrapolated_target = nil
+bs_hc_extrapolated_hc = nil
 	end
 
 	events.createmove(function(cmd)
@@ -21335,8 +21688,9 @@ if ref then
 			pcall(function() ref:set(false) end)
 			S.autoscope_script_owned = false
 		end
-	end
 end
+	end
+
 		apply_threat_overrides(local_player, threat)
 	end)
 

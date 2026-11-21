@@ -1895,7 +1895,7 @@ for iter_0_3, iter_0_4 in ipairs(bs_states.states) do
 		bs_abf_phases.body_yaw_delay_mode,
 		"static"
 	})
-	bs_abf_phases.body_yaw_delay_random_min = bs_v631:slider(bs_fmt("min"), 1, 20, 2, 1, "t"):depend({
+	bs_abf_phases.body_yaw_delay_random_min = bs_v631:slider(bs_fmt("min"), 1, 128, 15, 1, "t"):depend({
 		bs_v551,
 		iter_0_3
 	}, {
@@ -1905,7 +1905,28 @@ for iter_0_3, iter_0_4 in ipairs(bs_states.states) do
 		bs_abf_phases.body_yaw_delay_mode,
 		"random"
 	})
-	bs_abf_phases.body_yaw_delay_random_max = bs_v631:slider(bs_fmt("max"), 1, 20, 6, 1, "t"):depend({
+	bs_abf_phases.body_yaw_delay_random_max = bs_v631:slider(bs_fmt("max"), 1, 128, 30, 1, "t"):depend({
+		bs_v551,
+		iter_0_3
+	}, {
+		bs_abf_phases.body_yaw,
+		true
+	}, {
+		bs_abf_phases.body_yaw_delay_mode,
+		"random"
+	})
+	-- Separate delay for random body yaw mode (slower, less predictable)
+	bs_abf_phases.body_yaw_random_delay_min = bs_v631:slider(bs_fmt("random min"), 1, 128, 20, 1, "t"):depend({
+		bs_v551,
+		iter_0_3
+	}, {
+		bs_abf_phases.body_yaw,
+		true
+	}, {
+		bs_abf_phases.body_yaw_delay_mode,
+		"random"
+	})
+	bs_abf_phases.body_yaw_random_delay_max = bs_v631:slider(bs_fmt("random max"), 1, 128, 40, 1, "t"):depend({
 		bs_v551,
 		iter_0_3
 	}, {
@@ -3702,17 +3723,17 @@ bs_fake_lag_editor = {
 -- FakeLag Editor gear
 bs_fake_lag_editor.fake_lag_editor_gear = bs_fake_lag_editor.fake_lag_editor:create()
 bs_fake_lag_editor.fake_lag_editor_mode = bs_fake_lag_editor.fake_lag_editor_gear:combo("Mode", { "Default", "Dynamic", "Maximum", "Jitter", "Flicker" }):depend({ bs_fake_lag_editor.fake_lag_editor, true })
-bs_fake_lag_editor.fake_lag_default_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Default Limit", 1, 15, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Default" })
+bs_fake_lag_editor.fake_lag_default_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Default Limit", 1, 16, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Default" })
 bs_fake_lag_editor.fake_lag_default_variability = bs_fake_lag_editor.fake_lag_editor_gear:slider("Default Variability", 0, 100, 0, 1, "%"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Default" })
-bs_fake_lag_editor.fake_lag_dynamic_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Dynamic Limit", 1, 15, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Dynamic" })
+bs_fake_lag_editor.fake_lag_dynamic_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Dynamic Limit", 1, 16, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Dynamic" })
 bs_fake_lag_editor.fake_lag_dynamic_variability = bs_fake_lag_editor.fake_lag_editor_gear:slider("Dynamic Variability", 0, 100, 0, 1, "%"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Dynamic" })
 bs_fake_lag_editor.fake_lag_maximum_variability = bs_fake_lag_editor.fake_lag_editor_gear:slider("Maximum Variability", 0, 100, 0, 1, "%"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Maximum" })
-bs_fake_lag_editor.fake_lag_jitter_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Jitter Limit", 1, 15, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Jitter" })
-bs_fake_lag_editor.fake_lag_jitter_override = bs_fake_lag_editor.fake_lag_editor_gear:slider("Jitter Limit Override", 1, 15, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Jitter" })
+bs_fake_lag_editor.fake_lag_jitter_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Jitter Limit", 1, 16, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Jitter" })
+bs_fake_lag_editor.fake_lag_jitter_override = bs_fake_lag_editor.fake_lag_editor_gear:slider("Jitter Limit Override", 1, 16, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Jitter" })
 bs_fake_lag_editor.fake_lag_jitter_timer = bs_fake_lag_editor.fake_lag_editor_gear:slider("Jitter Switch Timer", 1, 50, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Jitter" })
 bs_fake_lag_editor.fake_lag_jitter_variability = bs_fake_lag_editor.fake_lag_editor_gear:slider("Jitter Variability", 0, 100, 0, 1, "%"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Jitter" })
-bs_fake_lag_editor.fake_lag_flicker_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Flicker Limit", 1, 15, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Flicker" })
-bs_fake_lag_editor.fake_lag_flicker_override = bs_fake_lag_editor.fake_lag_editor_gear:slider("Flicker Limit Override", 1, 15, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Flicker" })
+bs_fake_lag_editor.fake_lag_flicker_limit = bs_fake_lag_editor.fake_lag_editor_gear:slider("Flicker Limit", 1, 16, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Flicker" })
+bs_fake_lag_editor.fake_lag_flicker_override = bs_fake_lag_editor.fake_lag_editor_gear:slider("Flicker Limit Override", 1, 16, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Flicker" })
 bs_fake_lag_editor.fake_lag_flicker_timer = bs_fake_lag_editor.fake_lag_editor_gear:slider("Flicker Switch Timer", 1, 50, 1, 1, "t"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Flicker" })
 bs_fake_lag_editor.fake_lag_flicker_variability = bs_fake_lag_editor.fake_lag_editor_gear:slider("Flicker Variability", 0, 100, 0, 1, "%"):depend({ bs_fake_lag_editor.fake_lag_editor, true }, { bs_fake_lag_editor.fake_lag_editor_mode, "Flicker" })
 
@@ -3783,13 +3804,13 @@ do
 
 			return math.min(math.random(5, 6), base_limit)
 		elseif mode == "maximum" then
-			local max_process_ticks = 14
+			local max_process_ticks = 24
 
 			pcall(function()
 				max_process_ticks = cvar.sv_maxusrcmdprocessticks:int()
 			end)
 
-			return math.max(14, max_process_ticks)
+			return max_process_ticks
 		elseif mode == "jitter" then
 			return math.floor(globals.tickcount / timer) % 2 == 0 and base_limit or override_limit
 		elseif mode == "flicker" then
@@ -3938,7 +3959,7 @@ bs_v718.hc_conditions_gear = bs_v718.hc_conditions:create()
 -- Condition-based HC overrides (aimbot-level, not per-player)
 -- Structure: selectable of states -> weapon list -> per-weapon HC slider
 bs_v718.hc_cond_gear = bs_v718.hc_conditions:create()
-bs_v718.hc_cond_state_list = bs_v718.hc_cond_gear:combo("State", { "No Scope", "In Air", "LC/Defensive", "Standing", "Below", "Above", "Enemy HP", "Enemy Moving" }):depend({ bs_v718.hc_conditions, true })
+bs_v718.hc_cond_state_list = bs_v718.hc_cond_gear:combo("State", { "No Scope", "In Air", "LC/Defensive", "Standing", "Below", "Above", "Enemy HP", "Enemy Moving", "Enemy Zeus/Knife", "Enemy Fakelag" }):depend({ bs_v718.hc_conditions, true })
 bs_v718.hc_cond_state_en = {}
 bs_v718.hc_cond_state_wlist = {}
 bs_v718.hc_cond_state_wpn = {}
@@ -3946,8 +3967,8 @@ bs_v718.hc_cond_state_sl = {}
 bs_v718.hc_cond_state_ext_en = {}
 bs_v718.hc_cond_state_ext_ticks = {}
 bs_v718.hc_cond_state_ext_thresh = {}
-local bs_cond_states = { "noscope", "air", "lc", "stand", "below", "above", "enemyhp", "enemymove" }
-local bs_cond_labels = { "No Scope", "In Air", "LC/Defensive", "Standing", "Below", "Above", "Enemy HP", "Enemy Moving" }
+local bs_cond_states = { "noscope", "air", "lc", "stand", "below", "above", "enemyhp", "enemymove", "enemyzeus", "enemyfakelag" }
+local bs_cond_labels = { "No Scope", "In Air", "LC/Defensive", "Standing", "Below", "Above", "Enemy HP", "Enemy Moving", "Enemy Zeus/Knife", "Enemy Fakelag" }
 for ci, cstate in ipairs(bs_cond_states) do
 	bs_v718.hc_cond_state_en[cstate] = bs_v718.hc_cond_gear:switch(bs_cond_labels[ci] .. " Enable"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] })
 	bs_v718.hc_cond_state_wlist[cstate] = bs_v718.hc_cond_gear:list(cstate .. " Weapon", { "awp", "auto_sniper", "scout" }):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, bs_cond_labels[ci] }, { bs_v718.hc_cond_state_en[cstate], true })
@@ -3971,6 +3992,24 @@ bs_v718.hc_cond_hp_threshold = {}
 for _, hw in ipairs({ { key = "awp", label = "AWP", widx = 1 }, { key = "auto_sniper", label = "Auto-Sniper", widx = 2 }, { key = "scout", label = "Scout", widx = 3 } }) do
 	bs_v718.hc_cond_hp_threshold[hw.key] = bs_v718.hc_cond_gear:slider("Enemy HP Threshold " .. hw.label, 0, 100, 50, 1):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "Enemy HP" }, { bs_v718.hc_cond_state_en["enemyhp"], true }, { bs_v718.hc_cond_state_wlist["enemyhp"], hw.widx }, { bs_v718.hc_cond_state_wpn["enemyhp"][hw.key], true })
 end
+
+-- Enemy Fakelag threshold sliders (which fakelag levels trigger this condition)
+bs_v718.hc_cond_fl_threshold = {}
+local fl_levels = { "LOW", "MEDIUM", "HIGH" }
+for _, level in ipairs(fl_levels) do
+	bs_v718.hc_cond_fl_threshold[level] = bs_v718.hc_cond_gear:switch("Enable on " .. level):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "Enemy Fakelag" }, { bs_v718.hc_cond_state_en["enemyfakelag"], true })
+end
+
+-- Minimum confidence required for fakelag condition to trigger
+bs_v718.hc_cond_fl_min_conf = bs_v718.hc_cond_gear:slider("Min Confidence", 0, 100, 40, 1, function(v) return v .. "%" end):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "Enemy Fakelag" }, { bs_v718.hc_cond_state_en["enemyfakelag"], true })
+
+-- Diagnostics toggle for fakelag detector
+bs_v718.hc_cond_fl_diag = bs_v718.hc_cond_gear:switch("Diagnostics"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "Enemy Fakelag" }, { bs_v718.hc_cond_state_en["enemyfakelag"], true })
+
+-- Diagnostics toggle for airborne detector
+bs_v718.hc_cond_air_diag = bs_v718.hc_cond_gear:switch("Airborne Diagnostics"):depend({ bs_v718.hc_conditions, true }, { bs_v718.hc_cond_state_list, "In Air" }, { bs_v718.hc_cond_state_en["air"], true })
+
+-- Fakelag HC uses the standard per-condition, per-weapon HC controls above.
 
 bs_v621.aimbot = bs_v718
 
@@ -6691,11 +6730,14 @@ function bs_get_state.get(arg_214_0)
 	local var_214_1 = var_214_0.m_flDuckAmount
 	local var_214_2 = var_214_0.m_vecVelocity:length2d()
 	local var_214_3 = not bs_v532 and bit.band(var_214_0.m_fFlags or 0, 1) == 1
-	local var_214_4 = bs_menu.antiaim.angles.builder["legit aa"]
+	local var_214_4 = bs_menu.antiaim.angles.builder and bs_menu.antiaim.angles.builder["legit aa"]
 
-	if arg_214_0 and var_214_4 and var_214_4.allow_state:get() then
-		bs_v522 = 0
-		return "legit aa"
+	if arg_214_0 and var_214_4 then
+		local ok, enabled = pcall(function() return var_214_4.allow_state:get() end)
+		if ok and enabled then
+			bs_v522 = 0
+			return "legit aa"
+		end
 	end
 
 	local var_214_5 = false
@@ -6770,10 +6812,13 @@ function bs_get_state.visual(arg_218_0)
 	local var_218_2 = var_218_0.m_vecVelocity or vector(0, 0, 0)
 	local var_218_3 = var_218_2.length2d and var_218_2:length2d() or math.sqrt((var_218_2.x or 0) * (var_218_2.x or 0) + (var_218_2.y or 0) * (var_218_2.y or 0))
 	local var_218_4 = not bs_v532 and bit.band(var_218_0.m_fFlags or 0, 1) == 1
-	local var_218_5 = bs_menu.antiaim.angles.builder["legit aa"]
+	local var_218_5 = bs_menu.antiaim.angles.builder and bs_menu.antiaim.angles.builder["legit aa"]
 
-	if arg_218_0 and var_218_5 and var_218_5.allow_state:get() then
-		return "legit aa"
+	if arg_218_0 and var_218_5 then
+		local ok, enabled = pcall(function() return var_218_5.allow_state:get() end)
+		if ok and enabled then
+			return "legit aa"
+		end
 	end
 
 	if var_218_4 then
@@ -11082,20 +11127,20 @@ function bs_aa_updater.update_yaw(arg_374_0, arg_374_1, arg_374_2, arg_374_3)
 			return math.huge
 		end
 
-		local function var_374_20(arg_375_0)
-			if not var_374_19(arg_375_0) then
-				return
-			end
-
-			local var_375_1 = var_374_25(arg_375_0)
-			local var_375_2 = var_374_2 and var_374_2:dist2d(arg_375_0:get_origin()) or math.huge
-			local var_375_3 = var_375_2 * 100000 + var_375_1
-
-			if var_375_3 < var_374_3 then
-				var_374_3 = var_375_3
-				var_374_4 = arg_375_0
-			end
+local function var_374_20(arg_375_0)
+		if not var_374_19(arg_375_0) then
+			return
 		end
+
+		local var_375_1 = var_374_25(arg_375_0)
+		local var_375_2 = var_374_2 and var_374_2:dist2d(arg_375_0:get_origin()) or math.huge
+		local var_375_3 = var_375_1 * 100000 + var_375_2
+
+		if var_375_3 < var_374_3 then
+			var_374_3 = var_375_3
+			var_374_4 = arg_375_0
+		end
+	end
 
 		-- Priority: engine crosshair threat, then visible enemies nearest crosshair, then any live enemy nearest crosshair.
 		local var_374_5, var_374_6 = pcall(function()
@@ -11419,8 +11464,8 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 
 			if (bs_v274[arg_376_3] or 0) <= 0 then
-				local var_376_7 = arg_376_2.body_yaw_delay_random_min and arg_376_2.body_yaw_delay_random_min:get() or 2
-				local var_376_8 = arg_376_2.body_yaw_delay_random_max and arg_376_2.body_yaw_delay_random_max:get() or 6
+				local var_376_7 = arg_376_2.body_yaw_delay_random_min and arg_376_2.body_yaw_delay_random_min:get() or 15
+				local var_376_8 = arg_376_2.body_yaw_delay_random_max and arg_376_2.body_yaw_delay_random_max:get() or 30
 
 				if var_376_8 < var_376_7 then
 					var_376_7, var_376_8 = var_376_8, var_376_7
@@ -11528,8 +11573,8 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			end
 
 			if (bs_v274[arg_376_3] or 0) <= 0 then
-				local var_376_7 = arg_376_2.body_yaw_delay_random_min and arg_376_2.body_yaw_delay_random_min:get() or 2
-				local var_376_8 = arg_376_2.body_yaw_delay_random_max and arg_376_2.body_yaw_delay_random_max:get() or 6
+				local var_376_7 = arg_376_2.body_yaw_random_delay_min and arg_376_2.body_yaw_random_delay_min:get() or 6
+				local var_376_8 = arg_376_2.body_yaw_random_delay_max and arg_376_2.body_yaw_random_delay_max:get() or 12
 
 				if var_376_8 < var_376_7 then
 					var_376_7, var_376_8 = var_376_8, var_376_7
@@ -11600,10 +11645,12 @@ function bs_aa_updater.update_body_yaw(arg_376_0, arg_376_1, arg_376_2, arg_376_
 			var_376_2 = bs_v721[arg_376_3]
 		end
 
-		-- On flip, pick random limit between the set limit (fake_limit_random) and 60
+		-- On flip, pick random limit between left_limit and right_limit from preset
 		if arg_376_0.choked_commands == 0 then
-			local min_limit = arg_376_2.fake_limit_random and math.abs(arg_376_2.fake_limit_random:get()) or 0
-			var_376_3 = math.random(min_limit, 60)
+			local min_limit = arg_376_2.left_limit and arg_376_2.left_limit:get() or 0
+			local max_limit = arg_376_2.right_limit and arg_376_2.right_limit:get() or 60
+			if min_limit > max_limit then min_limit, max_limit = max_limit, min_limit end
+			var_376_3 = math.random(min_limit, max_limit)
 			bs_v_random_body_yaw_limit[arg_376_3] = var_376_3
 		else
 			var_376_3 = bs_v_random_body_yaw_limit[arg_376_3] or 0
@@ -12163,8 +12210,8 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 
 	bs_force_game_events = (not bs_ge_fakelag_block) and ((bs_defensive_mgr.game_events_hold_switch > 0) or (bs_defensive_mgr.game_events_hold_reload > 0) or (bs_defensive_mgr.game_events_hold_peek > 0))
 
-	-- Base state name for higher-priority systems (Game Events, LC) - computed without Legit AA
-	local bs_base_state_name = bs_get_state.get(false)
+	-- State name passed in (includes Legit AA from caller)
+	local bs_base_state_name = arg_389_1
 
 	if bs_force_game_events then
 		bs_defensive_mgr.cleanup()
@@ -12272,9 +12319,23 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 				pcall(function()
 					bs_config.antiaim.fake_lag.limit_pui:override(bs_choke_cur_val[bs_base_state_name])
 				end)
-			end
+end
 		end
 	end
+
+	-- ========================================================================
+	-- LEGIT AA - Highest priority (runs before builder preset)
+	-- ========================================================================
+	if bs_base_state_name == "legit aa" then
+		bs_legit_aa.is_working = true
+		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, nil)
+		bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, false)
+		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
+		bs_aa_state_obj:run()
+		bs_v474(arg_389_0)
+		return
+	end
+	bs_legit_aa.is_working = false
 
 	bs_aa_state_obj:define()
 	pcall(function()
@@ -12286,150 +12347,10 @@ function bs_aa_updater.update(arg_389_0, arg_389_1)
 	bs_break_lc.handle_normal(arg_389_0, bs_aa_state_obj)
 
 	-- ========================================================================
-	-- PRIORITY GATE: Determine winning AA system before any writes
-	-- Higher priority SUPPRESSES lower priority (no overwrite races)
+	-- Apply builder preset FIRST (desync comes from here)
 	-- ========================================================================
-
-	-- Pre-compute safe head state for legit AA condition
-	local bs_safe_head_on = false
-	local bs_sh_fakelag_block = false
-	pcall(function()
-		local lp = entity.get_local_player()
-		bs_sh_fakelag_block = lp and lp:is_alive() and bs_config.antiaim.fake_lag.enabled_pui:get() and (lp.m_vecVelocity and lp.m_vecVelocity:length2d() or 0) > 1.11
-	end)
-	if not bs_sh_fakelag_block then
-		pcall(function()
-			bs_safe_head_on = bs_safe_head.think(arg_389_0)
-		end)
-	end
-
-	-- 1. LEGIT AA - Highest priority (matches TRUE SOURCE behavior)
-	-- Evaluate Legit AA once per command, reuse result
-	local bs_v1139 = bs_legit_aa.think(arg_389_0)
-	bs_legit_aa.is_working = bs_v1139
-	if bs_v1139 then
-		bs_v1138 = bs_aa_updater.get_preset(bs_base_state_name)
-		bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
-		bs_async_flip(bs_base_state_name)
-
-		pcall(function()
-			local var_389_18_1 = bs_v1138
-			if var_389_18_1 and var_389_18_1.abf_on_shot and var_389_18_1.abf_on_shot:get() and arg_389_0.in_attack and not bs_anti_brute.on_shot_last_attack then
-				bs_v591({ name = "?", time = globals.curtime }, true, true)
-				pcall(function()
-					local var_389_18_2 = bs_menu.info and bs_menu.info.notify
-					local var_389_18_3 = var_389_18_2 and var_389_18_2.col_abf_hit and var_389_18_2.col_abf_hit:get() or color(255, 160, 80, 255)
-					bs_notify.new({
-						"anti-bruteforce triggered by ",
-						"local shot",
-						" due to on-shot impact - angle shifted"
-					}, var_389_18_3)
-				end)
-			end
-			bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
-		end)
-
-		
-
-bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_safe_head_on)
-		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
-
-		if not bs_v1142 and not bs_safe_head_on then
-bs_anti_brute.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_v1138)
-		end
-
-		if not bs_safe_head_on then
-bs_aa_updater.update_body_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
-		end
-
-bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
-bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
-
-		bs_legit_aa.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
-
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		return
-	end
-
-	-- 2. FREESTANDING - Absolute priority when active (below Game Events)
-	local bs_fs_active = false
-	pcall(function()
-		bs_fs_active = bs_freestanding.think()
-	end)
-	if bs_fs_active then
-		bs_defensive_mgr.cleanup()
-		bs_legit_aa.is_working = false
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		bs_freestanding.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		return
-	end
-
-	-- 3. MANUAL AA - Overrides everything below
-	local bs_manual_active = false
-	pcall(function()
-		bs_manual_active = bs_manual_yaw.think()
-	end)
-	if bs_manual_active then
-		bs_defensive_mgr.cleanup()
-		bs_legit_aa.is_working = false
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		bs_manual_yaw.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		return
-	end
-
-	-- 4. SAFE HEAD - Right below Manual AA, overrides everything below
-	if bs_safe_head_on then
-		bs_defensive_mgr.cleanup()
-		bs_legit_aa.is_working = false
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		bs_safe_head.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
-		bs_aa_state_obj:run()
-		bs_v474(arg_389_0)
-		return
-	end
-
-	-- 6. NORMAL DEFENSIVE AA - Overrides Normal AA
 	bs_v1138 = bs_aa_updater.get_preset(bs_base_state_name)
 	bs_aa_updater.update_yaw(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
-
-	if bs_v1138 == nil or not bs_v1138.allow_state:get() then
-		if bs_defensive_mgr then bs_defensive_mgr.cleanup() end
-		bs_legit_aa.is_working = false
-		pcall(function()
-			rage.antiaim:override_hidden_pitch(0)
-			rage.antiaim:override_hidden_yaw_offset(0)
-			bs_config.antiaim.fake_lag.limit:override(nil)
-			bs_config.antiaim.angles.pitch:override("Disabled")
-			bs_config.antiaim.angles.yaw:override("disabled")
-			bs_config.antiaim.angles.yaw_add:override(0)
-			bs_config.antiaim.angles.yaw_base:override("Local View")
-			bs_config.antiaim.angles.yaw_modifier:override("Disabled")
-			bs_config.antiaim.angles.modifier_offset:override(0)
-			bs_config.antiaim.angles.body_yaw:override(false)
-			bs_config.antiaim.angles.inverter:override(false)
-			bs_config.antiaim.angles.left_limit:override(0)
-			bs_config.antiaim.angles.right_limit:override(0)
-			bs_config.antiaim.angles.options:override({})
-			bs_config.antiaim.angles.disable_yaw_modifiers:override(false)
-			bs_config.antiaim.angles.body_freestanding:override(false)
-			bs_config.antiaim.angles.freestanding:override(false)
-			bs_config.antiaim.angles.freestand_peek:override("Off")
-			bs_config.antiaim.angles.avoid_backstab:override(false)
-			bs_config.rage.main.double_tap_lag_options:override("On Peek")
-			bs_config.rage.main.hide_shots_options:override("Favor Fire Rate")
-		end)
-		return
-	end
-
-	bs_aa_state_obj.avoid_backstab = bs_menu.antiaim.general.avoid_backstab.switch:get()
 	bs_async_flip(bs_base_state_name)
 
 	pcall(function()
@@ -12449,11 +12370,17 @@ bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 		bs_anti_brute.on_shot_last_attack = arg_389_0.in_attack and true or false
 	end)
 
-	bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_safe_head_on)
-	pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
-
-	if not bs_v1142 and not bs_safe_head_on then
-		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_v1138)
+	-- Pre-compute safe head state (needed for body yaw suppression)
+	local bs_safe_head_on = false
+	local bs_sh_fakelag_block = false
+	pcall(function()
+		local lp = entity.get_local_player()
+		bs_sh_fakelag_block = lp and lp:is_alive() and bs_config.antiaim.fake_lag.enabled_pui:get() and (lp.m_vecVelocity and lp.m_vecVelocity:length2d() or 0) > 1.11
+	end)
+	if not bs_sh_fakelag_block then
+		pcall(function()
+			bs_safe_head_on = bs_safe_head.think(arg_389_0)
+		end)
 	end
 
 	if not bs_safe_head_on then
@@ -12463,6 +12390,47 @@ bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 	bs_aa_updater.update_modifier(arg_389_0, bs_aa_state_obj, bs_v1138, bs_base_state_name)
 	bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 
+	-- ========================================================================
+	-- PRIORITY GATE: Higher priority MODIFIES state object, falls through
+	-- Only Game Events and Legit AA return early with run()
+	-- ========================================================================
+
+	-- Game Events - absolute priority, runs to completion
+	local bs_force_game_events = false
+	-- ... (game events logic from earlier in function)
+	-- Note: Game Events is handled at the START of the function before this point
+	-- If it was active, the function would have already returned
+
+	-- 2. FREESTANDING - Modifies state, falls through
+	local bs_fs_active = false
+	pcall(function()
+		bs_fs_active = bs_freestanding.think()
+	end)
+	if bs_fs_active then
+		bs_defensive_mgr.cleanup()
+		bs_freestanding.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
+		-- Don't run here, fall through to final run
+	end
+
+	-- 3. MANUAL AA - Modifies state, falls through
+	local bs_manual_active = false
+	pcall(function()
+		bs_manual_active = bs_manual_yaw.think()
+	end)
+	if bs_manual_active then
+		bs_defensive_mgr.cleanup()
+		bs_manual_yaw.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
+		-- Don't run here, fall through to final run
+	end
+
+	-- 4. SAFE HEAD - Modifies state, falls through
+	if bs_safe_head_on then
+		bs_defensive_mgr.cleanup()
+		bs_safe_head.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
+		-- Don't run here, fall through to final run
+	end
+
+	-- 5. FAKE DUCK - Overrides hidden pitch/yaw
 	local bs_fake_duck_on = false
 	pcall(function()
 		bs_fake_duck_on = bs_config.antiaim.misc.fake_duck:get()
@@ -12476,17 +12444,22 @@ bs_break_lc.update(arg_389_0, bs_aa_state_obj, bs_base_state_name)
 		end)
 		if bs_defensive_mgr then bs_defensive_mgr.cleanup() end
 	else
+		-- 6. NORMAL DEFENSIVE AA
+		bs_v1142, bs_v1130 = bs_defensive_mgr.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_safe_head_on)
 		pcall(function() bs_config.antiaim.fake_lag.limit:override(nil) end)
 	end
 
-	-- Safe Head already returned early above if active
-	local bs_v1140 = false
+	-- 7. ANTI-BRUTE (only when safe head not active)
+	if not bs_v1142 and not bs_safe_head_on then
+		bs_anti_brute.update(arg_389_0, bs_aa_state_obj, bs_base_state_name, bs_v1138)
+	end
 
+	-- 8. DEFENSIVE SNAP
 	bs_freestanding.get_side(arg_389_0)
 
 	bs_v1131, bs_v1132, bs_v1133, bs_v1134 = bs_def_snap.think(bs_base_state_name)
 
-	if bs_v1131 and not bs_v1140 then
+	if bs_v1131 and not bs_safe_head_on then
 		bs_def_snap.apply(arg_389_0, bs_aa_state_obj, bs_v1132, bs_v1133, bs_v1134)
 	else
 		bs_def_snap.active = false
@@ -12517,7 +12490,10 @@ events.createmove(function(cmd)
 	-- Always run the orchestrator so Game Events can be evaluated
 	-- even when state resolution returns nil (Game Events is state-agnostic)
 	-- Orchestrator now computes base state name internally and evaluates Legit AA once
-	bs_aa_updater.update(cmd, nil)
+	local bs_v1139_early = bs_legit_aa.think(cmd)
+	bs_legit_aa.is_working = bs_v1139_early
+	local bs_state_name = bs_get_state.get(bs_v1139_early)
+	bs_aa_updater.update(cmd, bs_state_name)
 end)
 
 events.round_start(function()
@@ -18415,15 +18391,6 @@ events.pre_render(function()
 	end
 end)
 
-events.override_view(function(arg_102_0)
-	if not bs_super_toss.active then
-		return
-	end
-
-	arg_102_0.view = bs_super_toss.last_angles
-	render.camera_angles(bs_super_toss.last_angles)
-end)
-
 events.createmove(function(arg_102_1)
 	if not bs_super_toss.active then
 		return
@@ -21707,7 +21674,495 @@ do
 		
 		return math.sqrt(variance)
 	end
-	local S = {
+
+-- ========================================================================
+-- ENEMY FAKELAG DETECTOR
+-- Per-enemy simulation-time gap analysis for fakelag classification
+-- ========================================================================
+local bs_enemy_fakelag = {
+	-- Configuration (centralized for runtime tuning)
+	thresholds = {
+		normal_max = 1.5,   -- <= 1.5 ticks between updates = NORMAL
+		low_max = 2.5,      -- <= 2.5 ticks = LOW
+		medium_max = 3.5,   -- <= 3.5 ticks = MEDIUM
+		-- > 3.5 ticks = HIGH
+	},
+	confidence = {
+		min_samples = 3,           -- minimum observations before classification
+		consistency_bonus = 0.15,  -- per consistent observation
+		decay_per_normal = 0.2,    -- confidence loss per normal update
+		max = 1.0,
+		min = 0.0,
+	},
+	history = {
+		max_gaps = 8,          -- rolling window of recent gaps
+		max_unchanged = 4,     -- max consecutive unchanged simtime observations
+	},
+	-- Diagnostics
+	diagnostics_enabled = false,
+}
+
+-- Internal per-enemy tracking storage
+local fl_tracking = {}
+
+function bs_enemy_fakelag.reset()
+	fl_tracking = {}
+end
+
+function bs_enemy_fakelag.set_diagnostics(enabled)
+	bs_enemy_fakelag.diagnostics_enabled = enabled
+end
+
+-- Classify a single elapsed-tick gap
+local function classify_gap(elapsed_ticks)
+	if elapsed_ticks <= bs_enemy_fakelag.thresholds.normal_max then return "NORMAL" end
+	if elapsed_ticks <= bs_enemy_fakelag.thresholds.low_max then return "LOW" end
+	if elapsed_ticks <= bs_enemy_fakelag.thresholds.medium_max then return "MEDIUM" end
+	return "HIGH"
+end
+
+-- Update tracker for one enemy
+function bs_enemy_fakelag.update(p, idx, now)
+	if not p then return nil end
+	
+	-- Validate entity
+	local ok_alive, alive = pcall(function() return p:is_alive() end)
+	if not (ok_alive and alive) then
+		fl_tracking[idx] = nil
+		return nil
+	end
+	
+	local ok_dormant, dormant = pcall(function() return p:is_dormant() end)
+	if ok_dormant and dormant then
+		-- Don't track while dormant, but don't clear history either (entity reuse handled separately)
+		return fl_tracking[idx]
+	end
+	
+	-- Get simulation time
+	local simtime = nil
+	pcall(function() simtime = p.m_flSimulationTime end)
+	if not simtime or not is_finite(simtime) then
+		return fl_tracking[idx]
+	end
+	
+	-- Initialize tracker
+	local tr = fl_tracking[idx]
+	if not tr then
+		tr = {
+			last_simtime = simtime,
+			last_obs_tick = globals.tickcount,
+			unchanged_count = 0,
+			gaps = {},           -- recent elapsed-tick gaps
+			classification = "UNKNOWN",
+			confidence = 0.0,
+			last_update = now,
+		}
+		fl_tracking[idx] = tr
+	else
+		-- Handle entity reuse: if simtime went backwards or jumped impossibly far, reset
+		if simtime < tr.last_simtime - 0.01 then
+			tr.last_simtime = simtime
+			tr.last_obs_tick = globals.tickcount
+			tr.unchanged_count = 0
+			tr.gaps = {}
+			tr.classification = "UNKNOWN"
+			tr.confidence = 0.0
+		elseif simtime > tr.last_simtime + 2.0 then -- > 2 seconds jump = likely new entity
+			tr.last_simtime = simtime
+			tr.last_obs_tick = globals.tickcount
+			tr.unchanged_count = 0
+			tr.gaps = {}
+			tr.classification = "UNKNOWN"
+			tr.confidence = 0.0
+		end
+	end
+	
+	-- Track unchanged simtime observations (choked commands = no simtime update)
+	if is_finite(tr.last_simtime) and math.abs(simtime - tr.last_simtime) < 1e-6 then
+		tr.unchanged_count = tr.unchanged_count + 1
+	else
+		-- Simulation time advanced - calculate elapsed ticks
+		local sim_delta = simtime - tr.last_simtime
+		if sim_delta > 1e-6 and is_finite(sim_delta) then
+			local tick_interval = globals.tickinterval or 0.015625
+			if tick_interval <= 0 then tick_interval = 0.015625 end
+			
+			local elapsed_ticks = sim_delta / tick_interval
+			
+			-- Only record reasonable gaps (ignore micro-variations)
+			if elapsed_ticks > 0.5 and elapsed_ticks <= 64 then
+				tr.gaps[#tr.gaps + 1] = elapsed_ticks
+				-- Store the latest predicted choked ticks
+				tr.predicted_choked_ticks = math.floor(elapsed_ticks + 0.5)
+				-- Keep rolling window
+				while #tr.gaps > bs_enemy_fakelag.history.max_gaps do
+					table.remove(tr.gaps, 1)
+				end
+				
+				-- Update classification and confidence
+				local class = classify_gap(elapsed_ticks)
+				if class == tr.classification then
+					tr.confidence = math.min(bs_enemy_fakelag.confidence.max, tr.confidence + bs_enemy_fakelag.confidence.consistency_bonus)
+				else
+					tr.classification = class
+					tr.confidence = math.max(bs_enemy_fakelag.confidence.min, tr.confidence - 0.3)
+				end
+				
+				-- Normal updates reduce fakelag confidence
+				if class == "NORMAL" then
+					tr.confidence = math.max(bs_enemy_fakelag.confidence.min, tr.confidence - bs_enemy_fakelag.confidence.decay_per_normal)
+				end
+				
+				-- Minimum samples required for reliable classification
+				if #tr.gaps < bs_enemy_fakelag.confidence.min_samples then
+					tr.classification = "UNKNOWN"
+					tr.confidence = 0.0
+				end
+			end
+		end
+		
+		tr.unchanged_count = 0
+		tr.last_simtime = simtime
+	end
+	
+	tr.last_obs_tick = globals.tickcount
+	tr.last_update = now
+	
+	-- Diagnostics
+	if bs_enemy_fakelag.diagnostics_enabled then
+		print(string.format("[fl] idx=%s class=%s conf=%.2f gaps=%d unch=%d sim=%.4f",
+			tostring(idx), tr.classification, tr.confidence, #tr.gaps, tr.unchanged_count, simtime or 0))
+	end
+	
+	return tr
+end
+
+-- Get current classification for an enemy
+function bs_enemy_fakelag.get_classification(idx)
+	local tr = fl_tracking[idx]
+	if not tr then return "UNKNOWN", 0.0, 0 end
+	return tr.classification, tr.confidence, tr.predicted_choked_ticks or 0
+end
+
+-- Get detailed info for diagnostics
+function bs_enemy_fakelag.get_info(idx)
+	local tr = fl_tracking[idx]
+	if not tr then return nil end
+	return {
+		classification = tr.classification,
+		confidence = tr.confidence,
+		predicted_choked_ticks = tr.predicted_choked_ticks or 0,
+		gaps = tr.gaps,
+		unchanged_count = tr.unchanged_count,
+		last_simtime = tr.last_simtime,
+		last_update = tr.last_update,
+	}
+end
+
+-- Check if enemy is currently fakelagging (HIGH classification with sufficient confidence)
+function bs_enemy_fakelag.is_fakelagging(idx, min_confidence)
+	local class, conf = bs_enemy_fakelag.get_classification(idx)
+	min_confidence = min_confidence or 0.4
+	return class == "HIGH" and conf >= min_confidence
+end
+
+-- Check specific fakelag level
+function bs_enemy_fakelag.is_level(idx, level, min_confidence)
+	local class, conf = bs_enemy_fakelag.get_classification(idx)
+	min_confidence = min_confidence or 0.3
+	return class == level and conf >= min_confidence
+end
+
+-- ========================================================================
+-- ENEMY AIRBORNE DETECTOR
+-- Simulation-time-aware per-enemy airborne state tracking
+-- ========================================================================
+local bs_enemy_airborne = {
+	-- Configuration
+	thresholds = {
+		-- Vertical velocity threshold to consider "moving vertically" (units/s)
+		vertical_vel_threshold = 50.0,
+		-- Minimum simulation time delta to trust velocity calculation
+		min_sim_delta = 0.001,
+		-- Max simulation time delta (beyond this we don't trust the data)
+		max_sim_delta = 1.0,
+		-- Hysteresis: extra height above ground to stay AIRBORNE
+		landing_hysteresis = 2.0,
+		-- Minimum airborne duration to confirm TAKEOFF
+		min_airborne_duration = 0.05,
+		-- Maximum airborne duration without update before resetting (handles dormancy)
+		max_airborne_without_update = 2.0,
+	},
+	confidence = {
+		min_samples = 2,
+		consistency_bonus = 0.2,
+		decay = 0.15,
+		max = 1.0,
+		min = 0.0,
+	},
+	-- Diagnostics
+	diagnostics_enabled = false,
+}
+
+-- Internal per-enemy tracking storage
+local air_tracking = {}
+
+function bs_enemy_airborne.reset()
+	air_tracking = {}
+end
+
+function bs_enemy_airborne.set_diagnostics(enabled)
+	bs_enemy_airborne.diagnostics_enabled = enabled
+end
+
+-- Get grounded flag from entity
+local function get_grounded(p)
+	local flags = nil
+	pcall(function() flags = p.m_fFlags end)
+	if flags then
+		return bit.band(flags, 1) == 1
+	end
+	return nil
+end
+
+-- Get simulation time from entity
+local function get_simtime(p)
+	local st = nil
+	pcall(function() st = p.m_flSimulationTime end)
+	if st and is_finite(st) then return st end
+	return nil
+end
+
+-- Get origin from entity
+local function get_origin(p)
+	local o = nil
+	pcall(function() o = p:get_origin() end)
+	if o and is_finite(o.x) and is_finite(o.y) and is_finite(o.z) then return o end
+	return nil
+end
+
+-- Classify state based on grounded flag, vertical velocity, and position
+local function classify_state(tr, grounded, z_pos, vert_vel, sim_delta, now)
+	-- If we have no grounded flag, we can't reliably classify
+	if grounded == nil then
+		return "UNKNOWN", 0.0
+	end
+
+	local prev_state = tr.state or "UNKNOWN"
+	local new_state = prev_state
+	local confidence = tr.confidence or 0.0
+
+	-- Grounded flag is the primary signal
+	if grounded then
+		-- On ground
+		if z_pos and tr.last_z and z_pos <= tr.last_z + bs_enemy_airborne.thresholds.landing_hysteresis then
+			new_state = "GROUNDED"
+		else
+			-- Very close to ground but flag says grounded - likely GROUNDED
+			new_state = "GROUNDED"
+		end
+	else
+		-- Not grounded - could be TAKEOFF, AIRBORNE, or LANDING
+		if prev_state == "GROUNDED" or prev_state == "UNKNOWN" then
+			-- Just left ground
+			if vert_vel and vert_vel > bs_enemy_airborne.thresholds.vertical_vel_threshold then
+				new_state = "TAKEOFF"
+			else
+				-- Could be walking off a ledge or fakelag
+				new_state = "AIRBORNE"
+			end
+		elseif prev_state == "TAKEOFF" then
+			-- Confirm takeoff with upward velocity
+			if vert_vel and vert_vel > bs_enemy_airborne.thresholds.vertical_vel_threshold then
+				new_state = "AIRBORNE"
+			else
+				new_state = "AIRBORNE"
+			end
+		elseif prev_state == "AIRBORNE" then
+			-- Check if landing (descending and near ground)
+			if vert_vel and vert_vel < -bs_enemy_airborne.thresholds.vertical_vel_threshold then
+				if z_pos and tr.last_z and z_pos < tr.last_z then
+					new_state = "LANDING"
+				else
+					new_state = "AIRBORNE"
+				end
+			else
+				new_state = "AIRBORNE"
+			end
+		elseif prev_state == "LANDING" then
+			-- Stay in LANDING until grounded flag confirms
+			new_state = "LANDING"
+		end
+	end
+
+	-- Confidence update
+	if new_state == prev_state then
+		confidence = math.min(bs_enemy_airborne.confidence.max, confidence + bs_enemy_airborne.confidence.consistency_bonus)
+	else
+		confidence = math.max(bs_enemy_airborne.confidence.min, confidence - 0.3)
+	end
+
+	-- Low confidence if insufficient simtime delta
+	if sim_delta and sim_delta < bs_enemy_airborne.thresholds.min_sim_delta then
+		confidence = math.max(bs_enemy_airborne.confidence.min, confidence - bs_enemy_airborne.confidence.decay)
+	end
+
+	-- Reset airborne duration on state change to GROUNDED
+	local airborne_duration = tr.airborne_duration or 0
+	if new_state == "GROUNDED" then
+		airborne_duration = 0
+	elseif prev_state ~= new_state then
+		airborne_duration = 0
+	elseif new_state == "TAKEOFF" or new_state == "AIRBORNE" or new_state == "LANDING" then
+		airborne_duration = airborne_duration + (sim_delta or 0.015625)
+	end
+
+	-- Cap airborne duration
+	if airborne_duration > bs_enemy_airborne.thresholds.max_airborne_without_update then
+		airborne_duration = 0
+		confidence = 0.0
+		new_state = "UNKNOWN"
+	end
+
+	return new_state, confidence, airborne_duration
+end
+
+-- Update tracker for one enemy
+function bs_enemy_airborne.update(p, idx, now)
+	if not p then return nil end
+
+	-- Validate entity
+	local ok_alive, alive = pcall(function() return p:is_alive() end)
+	if not (ok_alive and alive) then
+		air_tracking[idx] = nil
+		return nil
+	end
+
+	local ok_dormant, dormant = pcall(function() return p:is_dormant() end)
+	if ok_dormant and dormant then
+		-- Don't track while dormant, but don't clear history
+		return air_tracking[idx]
+	end
+
+	-- Get current data
+	local simtime = get_simtime(p)
+	local origin = get_origin(p)
+	local grounded = get_grounded(p)
+
+	if not simtime or not origin then
+		return air_tracking[idx]
+	end
+
+	-- Initialize tracker
+	local tr = air_tracking[idx]
+	if not tr then
+		tr = {
+			last_simtime = simtime,
+			last_z = origin.z,
+			last_vert_vel = 0,
+			last_grounded = grounded,
+			state = "UNKNOWN",
+			confidence = 0.0,
+			airborne_duration = 0,
+			last_update = now,
+			last_origin = {x = origin.x, y = origin.y, z = origin.z},
+		}
+		air_tracking[idx] = tr
+	else
+		-- Handle entity reuse: if simtime went backwards or jumped impossibly far, reset
+		if simtime < tr.last_simtime - 0.01 then
+			tr.last_simtime = simtime
+			tr.last_z = origin.z
+			tr.last_vert_vel = 0
+			tr.last_grounded = grounded
+			tr.state = "UNKNOWN"
+			tr.confidence = 0.0
+			tr.airborne_duration = 0
+			tr.last_origin = {x = origin.x, y = origin.y, z = origin.z}
+		elseif simtime > tr.last_simtime + 2.0 then
+			tr.last_simtime = simtime
+			tr.last_z = origin.z
+			tr.last_vert_vel = 0
+			tr.last_grounded = grounded
+			tr.state = "UNKNOWN"
+			tr.confidence = 0.0
+			tr.airborne_duration = 0
+			tr.last_origin = {x = origin.x, y = origin.y, z = origin.z}
+		end
+	end
+
+	-- Calculate simulation time delta
+	local sim_delta = simtime - tr.last_simtime
+	if sim_delta < 0 then sim_delta = 0 end
+
+	-- Calculate vertical velocity using simulation time delta
+	local vert_vel = 0
+	if sim_delta > bs_enemy_airborne.thresholds.min_sim_delta and sim_delta < bs_enemy_airborne.thresholds.max_sim_delta then
+		vert_vel = (origin.z - tr.last_z) / sim_delta
+	end
+
+	-- Classify state
+	local new_state, confidence, airborne_duration = classify_state(tr, grounded, origin.z, vert_vel, sim_delta, now)
+
+	-- Update tracker
+	tr.last_simtime = simtime
+	tr.last_z = origin.z
+	tr.last_vert_vel = vert_vel
+	tr.last_grounded = grounded
+	tr.state = new_state
+	tr.confidence = confidence
+	tr.airborne_duration = airborne_duration
+	tr.last_update = now
+	tr.last_origin = {x = origin.x, y = origin.y, z = origin.z}
+
+	-- Diagnostics
+	if bs_enemy_airborne.diagnostics_enabled then
+		print(string.format("[air] idx=%s state=%s conf=%.2f z=%.1f vz=%.1f simdt=%.4f flags_grounded=%s dur=%.2f",
+			tostring(idx), new_state, confidence, origin.z or 0, vert_vel, sim_delta,
+			tostring(grounded), airborne_duration))
+	end
+
+	return tr
+end
+
+-- Get current airborne state for an enemy
+function bs_enemy_airborne.get_state(idx)
+	local tr = air_tracking[idx]
+	if not tr then return "UNKNOWN", 0.0, 0.0 end
+	return tr.state, tr.confidence, tr.airborne_duration
+end
+
+-- Check if enemy is airborne (TAKEOFF, AIRBORNE, or LANDING)
+function bs_enemy_airborne.is_airborne(idx, min_confidence)
+	local state, conf, _ = bs_enemy_airborne.get_state(idx)
+	min_confidence = min_confidence or 0.3
+	return (state == "TAKEOFF" or state == "AIRBORNE" or state == "LANDING") and conf >= min_confidence
+end
+
+-- Check if enemy is grounded
+function bs_enemy_airborne.is_grounded(idx, min_confidence)
+	local state, conf, _ = bs_enemy_airborne.get_state(idx)
+	min_confidence = min_confidence or 0.3
+	return state == "GROUNDED" and conf >= min_confidence
+end
+
+-- Get detailed info for diagnostics
+function bs_enemy_airborne.get_info(idx)
+	local tr = air_tracking[idx]
+	if not tr then return nil end
+	return {
+		state = tr.state,
+		confidence = tr.confidence,
+		airborne_duration = tr.airborne_duration,
+		last_z = tr.last_z,
+		last_vert_vel = tr.last_vert_vel,
+		last_grounded = tr.last_grounded,
+		last_simtime = tr.last_simtime,
+		last_update = tr.last_update,
+	}
+end
+
+local S = {
 		enemies = {},            -- [idx] = { ent, name, hp, armor, alive, dormant, def, detected_until, samples, last_seen }
 		hc_ref = nil,
 		active_hc = nil,
@@ -21736,6 +22191,10 @@ do
 	local function release_overrides()
 		if S.hc_ref and S.active_hc then pcall(function() S.hc_ref:override(nil) end) end
 		S.active_hc = nil
+		pcall(function()
+			local sp = bs_config.rage.selection.safe_points
+			if sp then sp:override(nil) end
+		end)
 	end
 
 	local function enemy_index(p)
@@ -21822,10 +22281,12 @@ do
 		if vel and vel.x and vel.y and vel.z then
 			add_vel_sample(rec, vel, now)
 		end
+		-- Update fakelag detector
+		bs_enemy_fakelag.update(p, idx, now)
 		return rec
 	end
 
-	-- Refresh the enemy roster (non-dormant only). Querying dormant entities each tick
+-- Refresh the enemy roster (non-dormant only). Querying dormant entities each tick
 -- forces the engine to network/create dormant enemy instances around the map.
 	local function update_enemies(now)
 		local ok, players = pcall(entity.get_players, true, false)
@@ -21839,6 +22300,8 @@ do
 				local idx = enemy_index(p)
 				seen[idx] = true
 				update_defensive(p, idx, now)
+				-- Update airborne detector
+				bs_enemy_airborne.update(p, idx, now)
 			end
 		end
 	end
@@ -21907,7 +22370,33 @@ local limit = 255
   if not scoped and not auto_scope and dist and dist <= limit and dist > 0 and eligible("noscope") then state = "noscope" end
 	end
 
-	-- LC/Defensive (priority 2) - max 1800u
+	-- Enemy Zeus/Knife (priority 2, after noscope) - 200u range
+	if not state then
+		local threat_weapon = nil
+		pcall(function()
+			local wpn = threat:get_player_weapon()
+			if wpn then
+				local classname = wpn:get_classname()
+				threat_weapon = classname
+			end
+		end)
+		local is_zeus_or_knife = threat_weapon and (threat_weapon:find("Taser") or threat_weapon:find("Knife") or threat_weapon:find("weapon_knife") or threat_weapon:find("weapon_taser"))
+		if is_zeus_or_knife then
+			local ep = nil
+			pcall(function() ep = threat:get_origin() end)
+			if lp_pos and ep then
+				local dx = ep.x - lp_pos.x
+				local dy = ep.y - lp_pos.y
+				local dz = ep.z - lp_pos.z
+				local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+				if dist <= 200 and eligible("enemyzeus") then
+					state = "enemyzeus"
+				end
+			end
+		end
+	end
+
+	-- LC/Defensive (priority 3) - max 1800u
 	if not state and rec and rec.def and eligible("lc") then
 		local ep = nil
 		pcall(function() ep = threat:get_origin() end)
@@ -21917,6 +22406,35 @@ local limit = 255
 			local dz = ep.z - lp_pos.z
 			local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
 			if dist <= 1800 then state = "lc" end
+		end
+	end
+
+	-- Enemy Fakelag (priority 3) - max 1800u
+	if not state then
+		local fl_class, fl_conf = bs_enemy_fakelag.get_classification(enemy_index(threat))
+		local fl_enabled_levels = {}
+		local fl_min_conf = 0.4
+		pcall(function()
+			if bs_v718.hc_cond_fl_threshold then
+				for _, level in ipairs({"LOW", "MEDIUM", "HIGH"}) do
+					local s = bs_v718.hc_cond_fl_threshold[level]
+					if s then pcall(function() if s:get() then fl_enabled_levels[level] = true end end) end
+				end
+			end
+			if bs_v718.hc_cond_fl_min_conf then
+				fl_min_conf = (bs_v718.hc_cond_fl_min_conf:get() or 40) / 100.0
+			end
+		end)
+		local ep = nil
+		pcall(function() ep = threat:get_origin() end)
+		if lp_pos and ep then
+			local dx = ep.x - lp_pos.x
+			local dy = ep.y - lp_pos.y
+			local dz = ep.z - lp_pos.z
+			local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+			if fl_enabled_levels[fl_class] and fl_conf >= fl_min_conf and dist <= 1800 and eligible("enemyfakelag") then
+				state = "enemyfakelag"
+			end
 		end
 	end
 
@@ -21942,10 +22460,10 @@ if not state and ep_z and lp_z and ep_z < lp_z - 65 and eligible("below") then
 end
 
 -- In Air (priority 4) - max 1800u
+-- Uses improved airborne detector with simulation-time-aware vertical velocity
 if not state then
-	local in_air = false
-	pcall(function() in_air = not bit.band(threat.m_fFlags or 0, 1) == 1 end)
-	if in_air then
+	local air_state, air_conf = bs_enemy_airborne.get_state(enemy_index(threat))
+	if air_state == "TAKEOFF" or air_state == "AIRBORNE" or air_state == "LANDING" then
 		if above_dist <= 1800 and eligible("air") then state = "air" end
 	end
 end
@@ -21988,7 +22506,10 @@ if not state then
 		if vel then evel = (vel.x * vel.x + vel.y * vel.y) end
 	end)
 	local inair = false
-	pcall(function() inair = not bit.band(threat.m_fFlags or 0, 1) == 1 end)
+	local air_state, air_conf = bs_enemy_airborne.get_state(enemy_index(threat))
+	if air_state == "TAKEOFF" or air_state == "AIRBORNE" or air_state == "LANDING" then
+		inair = true
+	end
 	if inair or evel >= 100 then
 		if eligible("enemymove") and above_dist <= 1800 then state = "enemymove" end
 	end
@@ -22030,6 +22551,13 @@ local function decide_for_threat(rec, local_player, threat)
 				state = resolve_state(rec, local_player, threat, wc)
 				matched_state = state  -- Remember which condition actually matched
 				if state then
+					-- Enemy Zeus/Knife: disable safepoints when active
+					if state == "enemyzeus" then
+						pcall(function()
+							local sp = bs_config.rage.selection.safe_points
+							if sp then sp:override("Disabled") end
+						end)
+					end
 					local en = bs_v718.hc_cond_state_en[state]
 					local sl = bs_v718.hc_cond_state_sl[state]
 					local enabled = false
@@ -22068,6 +22596,8 @@ local function decide_for_threat(rec, local_player, threat)
 				end
 				-- NOTE: do NOT change 'state' or 'matched_state' here; extrapolation must use original matched condition's config
 			end
+
+			-- Enemy Fakelag HC is handled by the standard matched-condition override above.
 
 			-- Extrapolation per condition per weapon: if the matched condition has extrapolation enabled for this weapon, run prediction
 			local bs_hc_before_ext = cond_hc or 0
@@ -22292,10 +22822,6 @@ local function decide_for_threat(rec, local_player, threat)
 			end
 			if display_hc > 0 then parts[#parts + 1] = "HC" .. tostring(display_hc) end
 			if rec and rec.def then parts[#parts + 1] = "DEF" end
-			-- Extrapolation info
-			if bs_hc_extrapolated_target and bs_hc_extrapolation_confidence then
-				parts[#parts + 1] = "EXTRAP[" .. string.format("%.0f%%", bs_hc_extrapolation_confidence * 100) .. " / " .. string.format("%.1fu", bs_hc_extrapolation_uncertainty or 0) .. "]"
-			end
 			if #parts == 0 then return end
 			return "[" .. table.concat(parts, " ") .. "]"
 		end):create()
@@ -22308,6 +22834,8 @@ local function reset()
 		S.enemies = {}
 		S.stand_dwell = {}
 		lp_vel_samples = {}
+		bs_enemy_fakelag.reset()
+		bs_enemy_airborne.reset()
 		release_overrides()
 		bs_active_hc_value = 0
 		bs_active_hc_state = nil
@@ -22318,12 +22846,12 @@ local function reset()
 		bs_hc_extrapolation_pred_ticks = nil
 		bs_hc_extrapolation_pred_dist = nil
 		bs_hc_extrapolation_accel = nil
-end
+	end
 
 	-- HC system round start reset
 	events.round_start(reset)
 
-	events.createmove(function(cmd)
+events.createmove(function(cmd)
 		local attack_held = cmd and cmd.buttons and bit.band(cmd.buttons, 1) ~= 0
 		if attack_held and not S.last_attack_held then
 			S.last_shot_time = globals.curtime or 0
@@ -22341,6 +22869,22 @@ end
 			S.enemies = {}
 			bs_active_hc_value = 0
 			return
+		end
+
+		-- Update fakelag diagnostics toggle
+		if bs_v718.hc_cond_fl_diag then
+			local ok_diag, diag_val = pcall(function() return bs_v718.hc_cond_fl_diag:get() end)
+			if ok_diag then
+				bs_enemy_fakelag.set_diagnostics(diag_val)
+			end
+		end
+
+		-- Update airborne diagnostics toggle
+		if bs_v718.hc_cond_air_diag then
+			local ok_diag, diag_val = pcall(function() return bs_v718.hc_cond_air_diag:get() end)
+			if ok_diag then
+				bs_enemy_airborne.set_diagnostics(diag_val)
+			end
 		end
 
 		-- Record local player velocity for relative prediction
@@ -22492,7 +23036,10 @@ do
 
 		local target_air = false
 		pcall(function()
-			target_air = bit.band(target.m_fFlags or 0, 1) == 0
+			local air_state, air_conf = bs_enemy_airborne.get_state(enemy_index(target))
+			if air_state == "TAKEOFF" or air_state == "AIRBORNE" or air_state == "LANDING" then
+				target_air = true
+			end
 		end)
 		if cond_in_air and not target_air then return end
 
